@@ -1,0 +1,433 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Local, Posicao, proximaColuna, ruaDaColuna } from "@/lib/types";
+import { Card, PageHeader } from "@/components/ui";
+
+interface FormNovo {
+  codigo_coluna: string;
+  andar: string;
+  produto: string;
+  tamanho: string;
+  capacidade: string;
+  quantidade_atual: string;
+}
+
+const FORM_VAZIO: FormNovo = {
+  codigo_coluna: "",
+  andar: "1",
+  produto: "",
+  tamanho: "",
+  capacidade: "40",
+  quantidade_atual: "0",
+};
+
+const classeInput =
+  "w-full min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-ink outline-none focus:border-accent";
+
+export default function GerenciarPage() {
+  const supabase = useMemo(() => createClient(), []);
+  const [locais, setLocais] = useState<Local[]>([]);
+  const [localAtivoId, setLocalAtivoId] = useState<string>("");
+  const [novoLocal, setNovoLocal] = useState("");
+
+  const [posicoes, setPosicoes] = useState<Posicao[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [form, setForm] = useState<FormNovo>(FORM_VAZIO);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [edicao, setEdicao] = useState<Partial<Posicao>>({});
+
+  useEffect(() => {
+    let ativo = true;
+    async function carregar() {
+      setCarregando(true);
+      const [{ data: dLocais }, { data: dPos }] = await Promise.all([
+        supabase.from("locais").select("*").order("criado_em", { ascending: true }),
+        supabase
+          
+          .from("posicoes")
+          .select("*")
+          .order("codigo_coluna", { ascending: true })
+          .order("andar", { ascending: true }),
+      ]);
+      if (ativo) {
+        const listaLocais = (dLocais as Local[]) ?? [];
+        setLocais(listaLocais);
+        setLocalAtivoId((atual) => atual || listaLocais[0]?.id || "");
+        setPosicoes((dPos as Posicao[]) ?? []);
+        setCarregando(false);
+      }
+    }
+    carregar();
+
+    const canal = supabase
+      .channel("gerenciar-posicoes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "posicoes" }, () => carregar())
+      .on("postgres_changes", { event: "*", schema: "public", table: "locais" }, () => carregar())
+      .subscribe();
+
+    return () => {
+      ativo = false;
+      supabase.removeChannel(canal);
+    };
+  }, [supabase]);
+
+  async function adicionarLocal() {
+    if (!novoLocal.trim()) return;
+    const { data, error } = await supabase
+      
+      .from("locais")
+      .insert({ nome: novoLocal.trim() })
+      .select()
+      .single();
+    if (!error && data) {
+      setLocalAtivoId((data as Local).id);
+      setNovoLocal("");
+    }
+  }
+
+  const posicoesDoLocal = useMemo(
+    () => posicoes.filter((p) => p.local_id === localAtivoId),
+    [posicoes, localAtivoId]
+  );
+
+  const porRua = useMemo(() => {
+    const mapa = new Map<string, Posicao[]>();
+    for (const p of posicoesDoLocal) {
+      const rua = ruaDaColuna(p.codigo_coluna);
+      if (!mapa.has(rua)) mapa.set(rua, []);
+      mapa.get(rua)!.push(p);
+    }
+    for (const lista of mapa.values()) {
+      lista.sort((a, b) => a.codigo_coluna.localeCompare(b.codigo_coluna) || a.andar - b.andar);
+    }
+    return Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [posicoesDoLocal]);
+
+  const colunasExistentes = useMemo(
+    () => Array.from(new Set(posicoesDoLocal.map((p) => p.codigo_coluna))),
+    [posicoesDoLocal]
+  );
+
+  function preencherProximaColuna(rua: string) {
+    setForm((f) => ({ ...f, codigo_coluna: proximaColuna(rua, colunasExistentes) }));
+  }
+
+  async function criarPosicao(e: React.FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    setSalvando(true);
+
+    const { error } = await supabase.from("posicoes").insert({
+      local_id: localAtivoId || null,
+      codigo_coluna: form.codigo_coluna.trim().toUpperCase(),
+      andar: Number(form.andar),
+      produto: form.produto.trim() || null,
+      tamanho: form.tamanho.trim() || null,
+      capacidade: Number(form.capacidade) || 40,
+      quantidade_atual: Number(form.quantidade_atual) || 0,
+    });
+
+    setSalvando(false);
+    if (error) {
+      setErro(
+        error.code === "23505"
+          ? "Já existe uma posição com essa coluna + andar."
+          : "Não consegui salvar. Confere os campos."
+      );
+      return;
+    }
+    setForm({ ...FORM_VAZIO, codigo_coluna: form.codigo_coluna });
+  }
+
+  function abrirEdicao(p: Posicao) {
+    setEditandoId(p.id);
+    setEdicao({ ...p });
+  }
+
+  async function salvarEdicao(id: string) {
+    setSalvando(true);
+    const atualizacao = {
+      produto: edicao.produto || null,
+      tamanho: edicao.tamanho || null,
+      capacidade: Number(edicao.capacidade) || 40,
+      observacoes: edicao.observacoes || null,
+    };
+    await supabase.from("posicoes").update(atualizacao).eq("id", id);
+    setSalvando(false);
+    setEditandoId(null);
+    setEdicao({});
+  }
+
+  async function excluirPosicao(p: Posicao) {
+    if (!window.confirm(`Excluir a posição ${p.codigo_coluna} · andar ${p.andar}?`)) return;
+    setPosicoes((prev) => prev.filter((x) => x.id !== p.id));
+    await supabase.from("posicoes").delete().eq("id", p.id);
+  }
+
+  return (
+    <div>
+      <PageHeader
+        titulo="Gerenciar posições"
+        subtitulo="Organizado por rua (A, B, C…). Cadastre colunas/andares e atribua o produto."
+      />
+
+      <Card className="mb-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block min-w-0 flex-1">
+            <span className="mb-1.5 block text-sm text-ink-dim">Local / galpão</span>
+            <select
+              value={localAtivoId}
+              onChange={(e) => setLocalAtivoId(e.target.value)}
+              className={classeInput}
+            >
+              {locais.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block min-w-0 flex-1">
+            <span className="mb-1.5 block text-sm text-ink-dim">Adicionar novo local</span>
+            <div className="flex gap-2">
+              <input
+                value={novoLocal}
+                onChange={(e) => setNovoLocal(e.target.value)}
+                placeholder="Ex.: Depósito Pavuna"
+                className={classeInput}
+              />
+              <button
+                type="button"
+                onClick={adicionarLocal}
+                className="shrink-0 rounded-lg border border-accent px-4 py-2.5 font-semibold text-accent"
+              >
+                + Criar
+              </button>
+            </div>
+          </label>
+        </div>
+      </Card>
+
+      <Card className="mb-6">
+        <h2 className="mb-4 font-display text-base font-semibold tracking-wide text-ink">
+          NOVA POSIÇÃO
+        </h2>
+        <form onSubmit={criarPosicao} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Coluna</span>
+            <input
+              required
+              value={form.codigo_coluna}
+              onChange={(e) => setForm((f) => ({ ...f, codigo_coluna: e.target.value }))}
+              placeholder="A-1"
+              className={classeInput}
+            />
+          </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Andar</span>
+            <select
+              value={form.andar}
+              onChange={(e) => setForm((f) => ({ ...f, andar: e.target.value }))}
+              className={classeInput}
+            >
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="col-span-2 block min-w-0 sm:col-span-1 lg:col-span-2">
+            <span className="mb-1.5 block text-sm text-ink-dim">Produto</span>
+            <input
+              value={form.produto}
+              onChange={(e) => setForm((f) => ({ ...f, produto: e.target.value }))}
+              placeholder="Camisa Masc Home Mizuno 26/27"
+              className={classeInput}
+            />
+          </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Tamanho</span>
+            <input
+              value={form.tamanho}
+              onChange={(e) => setForm((f) => ({ ...f, tamanho: e.target.value }))}
+              placeholder="P, M, GG…"
+              className={classeInput}
+            />
+          </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Capacidade</span>
+            <input
+              type="number"
+              min={1}
+              value={form.capacidade}
+              onChange={(e) => setForm((f) => ({ ...f, capacidade: e.target.value }))}
+              className={classeInput}
+            />
+          </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Qtd. inicial</span>
+            <input
+              type="number"
+              min={0}
+              value={form.quantidade_atual}
+              onChange={(e) => setForm((f) => ({ ...f, quantidade_atual: e.target.value }))}
+              className={classeInput}
+            />
+          </label>
+
+          <div className="col-span-2 flex items-end sm:col-span-3 lg:col-span-6">
+            <button
+              type="submit"
+              disabled={salvando || !localAtivoId}
+              className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60"
+            >
+              {salvando ? "Salvando…" : "Adicionar posição"}
+            </button>
+          </div>
+        </form>
+        {erro && (
+          <p className="mt-3 rounded-lg border border-alert/40 bg-alert/10 px-3 py-2 text-sm text-alert">
+            {erro}
+          </p>
+        )}
+      </Card>
+
+      {carregando ? (
+        <p className="text-sm text-ink-dim">Carregando…</p>
+      ) : porRua.length === 0 ? (
+        <Card>
+          <p className="text-ink-dim">Nenhuma posição cadastrada nesse local ainda.</p>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-5">
+          {porRua.map(([rua, itens]) => (
+            <Card key={rua} className="p-0">
+              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <h3 className="font-display text-lg font-semibold tracking-wide text-ink">
+                  Rua {rua}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => preencherProximaColuna(rua)}
+                  className="shrink-0 rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent"
+                >
+                  + Nova coluna nessa rua
+                </button>
+              </div>
+              <div className="scroll-safe max-w-full">
+                <table className="w-full min-w-[780px] border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-ink-dim">
+                      <th className="whitespace-nowrap px-4 py-2.5 font-medium">Coluna</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 font-medium">Andar</th>
+                      <th className="px-4 py-2.5 font-medium">Produto</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 font-medium">Tamanho</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 font-medium">Capacidade</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 font-medium">Qtd. atual</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 font-medium">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itens.map((p) => {
+                      const emEdicao = editandoId === p.id;
+                      return (
+                        <tr key={p.id} className="border-b border-border last:border-0 hover:bg-surface-2/60">
+                          <td className="whitespace-nowrap px-4 py-2.5 text-ink">{p.codigo_coluna}</td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-ink">{p.andar}</td>
+                          <td className="px-4 py-2.5">
+                            {emEdicao ? (
+                              <input
+                                value={edicao.produto ?? ""}
+                                onChange={(e) => setEdicao((prev) => ({ ...prev, produto: e.target.value }))}
+                                className={classeInput}
+                              />
+                            ) : (
+                              <span className="text-ink">{p.produto ?? "—"}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {emEdicao ? (
+                              <input
+                                value={edicao.tamanho ?? ""}
+                                onChange={(e) => setEdicao((prev) => ({ ...prev, tamanho: e.target.value }))}
+                                className={`${classeInput} w-24`}
+                              />
+                            ) : (
+                              <span className="text-ink">{p.tamanho ?? "—"}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {emEdicao ? (
+                              <input
+                                type="number"
+                                value={edicao.capacidade ?? 40}
+                                onChange={(e) =>
+                                  setEdicao((prev) => ({ ...prev, capacidade: Number(e.target.value) }))
+                                }
+                                className={`${classeInput} w-20`}
+                              />
+                            ) : (
+                              <span className="text-ink">{p.capacidade}</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-ink">
+                            {p.quantidade_atual} / {p.capacidade}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5">
+                            {emEdicao ? (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => salvarEdicao(p.id)}
+                                  disabled={salvando}
+                                  className="rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-accent-ink"
+                                >
+                                  Salvar
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditandoId(null);
+                                    setEdicao({});
+                                  }}
+                                  className="rounded-md border border-border px-2.5 py-1 text-xs text-ink-dim"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => abrirEdicao(p)}
+                                  className="rounded-md border border-border px-2.5 py-1.5 text-ink-dim hover:text-ink"
+                                  title="Editar"
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  onClick={() => excluirPosicao(p)}
+                                  className="rounded-md border border-border px-2.5 py-1.5 text-ink-dim hover:border-alert hover:text-alert"
+                                  title="Excluir"
+                                >
+                                  🗑
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

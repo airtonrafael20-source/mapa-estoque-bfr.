@@ -1,0 +1,60 @@
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+:root {
+  --bg: #121213;
+  --surface: #1b1b1d;
+  --surface-2: #242427;
+  --border: #333336;
+  --ink: #f4f4f0;
+  --ink-dim: #9c9c99;
+  --accent: #c9a227;
+  --accent-ink: #16150d;
+  --ok: #3fa34d;
+  --pend: #d98e2b;
+  --alert: #c1443c;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-ink-dim: var(--ink-dim);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-ok: var(--ok);
+  --color-pend: var(--pend);
+  --color-alert: var(--alert);
+  --font-display: "Oswald", "Arial Narrow", sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--accent); color: var(--accent-ink); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.scroll-safe { overflow: auto; overscroll-behavior: contain; }
+
+@media print {
+  @page { margin: 10mm; }
+  body { background: #ffffff; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
