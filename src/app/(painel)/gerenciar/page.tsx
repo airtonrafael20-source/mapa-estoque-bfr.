@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Local, Posicao, proximaColuna, ruaDaColuna } from "@/lib/types";
 import { comprimirImagem } from "@/lib/imagem";
@@ -54,9 +54,21 @@ export default function GerenciarPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const inputImagemRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  const colunaInputRef = useRef<HTMLInputElement>(null);
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [edicao, setEdicao] = useState<Partial<Posicao>>({});
+
+  const [loteRua, setLoteRua] = useState("");
+  const [loteProduto, setLoteProduto] = useState("");
+  const [loteMarca, setLoteMarca] = useState("");
+  const [loteAno, setLoteAno] = useState("");
+  const [loteCapacidade, setLoteCapacidade] = useState("40");
+  const [loteTamanhos, setLoteTamanhos] = useState("P, M, G, GG, 2GG, 4GG, 6GG");
+  const [loteSalvando, setLoteSalvando] = useState(false);
+  const [loteErro, setLoteErro] = useState<string | null>(null);
+  const [loteAviso, setLoteAviso] = useState<string | null>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -132,6 +144,80 @@ export default function GerenciarPage() {
 
   function preencherProximaColuna(rua: string) {
     setForm((f) => ({ ...f, codigo_coluna: proximaColuna(rua, colunasExistentes) }));
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => colunaInputRef.current?.focus(), 350);
+  }
+
+  async function criarRuaCompleta(e: React.FormEvent) {
+    e.preventDefault();
+    setLoteErro(null);
+    setLoteAviso(null);
+
+    const rua = loteRua.trim().toUpperCase();
+    const tamanhos = loteTamanhos
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    if (!rua || tamanhos.length === 0 || !localAtivoId) {
+      setLoteErro("Preenche a rua e pelo menos um tamanho.");
+      return;
+    }
+
+    setLoteSalvando(true);
+
+    // Acha o próximo número de coluna livre nessa rua, e vai numerando
+    // uma coluna pra cada tamanho da lista (P → -1, M → -2, e assim por diante).
+    const numerosExistentes = colunasExistentes
+      .filter((c) => ruaDaColuna(c).toUpperCase() === rua)
+      .map((c) => parseInt(c.split("-")[1] ?? "0", 10))
+      .filter((n) => !isNaN(n));
+    const proximoNumero = numerosExistentes.length > 0 ? Math.max(...numerosExistentes) + 1 : 1;
+
+    const linhas = tamanhos.flatMap((tamanho, indice) => {
+      const codigo_coluna = `${rua}-${proximoNumero + indice}`;
+      return Array.from({ length: ANDARES_POR_COLUNA }, (_, i) => ({
+        local_id: localAtivoId,
+        codigo_coluna,
+        andar: i + 1,
+        produto: loteProduto.trim() || null,
+        tamanho,
+        marca: loteMarca.trim() || null,
+        ano: loteAno.trim() || null,
+        capacidade: Number(loteCapacidade) || 40,
+        quantidade_atual: 0,
+      }));
+    });
+
+    const { error } = await supabase
+      .from("posicoes")
+      .upsert(linhas, { onConflict: "codigo_coluna,andar", ignoreDuplicates: true });
+
+    if (error) {
+      setLoteSalvando(false);
+      setLoteErro("Não consegui criar a rua. Confere os campos.");
+      return;
+    }
+
+    const { data: novas } = await supabase
+      .from("posicoes")
+      .select("*")
+      .eq("local_id", localAtivoId)
+      .in("codigo_coluna", tamanhos.map((_, i) => `${rua}-${proximoNumero + i}`));
+
+    setPosicoes((prev) => {
+      const idsNovos = new Set((novas as Posicao[] | null)?.map((p) => p.id));
+      return [...prev.filter((p) => !idsNovos.has(p.id)), ...((novas as Posicao[]) ?? [])];
+    });
+
+    setLoteSalvando(false);
+    setLoteAviso(
+      `Rua ${rua}: criadas ${tamanhos.length} colunas (${rua}-${proximoNumero} a ${rua}-${
+        proximoNumero + tamanhos.length - 1
+      }), 1 tamanho por coluna, ${ANDARES_POR_COLUNA} andares cada.`
+    );
+    setLoteProduto("");
+    setTimeout(() => setLoteAviso(null), 6000);
   }
 
   async function aoEscolherImagem(e: React.ChangeEvent<HTMLInputElement>) {
@@ -228,8 +314,12 @@ export default function GerenciarPage() {
     const atualizacao = {
       produto: edicao.produto || null,
       tamanho: edicao.tamanho || null,
+      marca: edicao.marca || null,
+      ano: edicao.ano || null,
       codigo_barras: edicao.codigo_barras || null,
       capacidade: Number(edicao.capacidade) || 40,
+      quantidade_atual: Math.max(0, Number(edicao.quantidade_atual) || 0),
+      imagem_base64: edicao.imagem_base64 || null,
       observacoes: edicao.observacoes || null,
     };
     const { error } = await supabase.from("posicoes").update(atualizacao).eq("id", id);
@@ -239,6 +329,13 @@ export default function GerenciarPage() {
       setEditandoId(null);
       setEdicao({});
     }
+  }
+
+  async function aoEscolherImagemEdicao(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    if (!arquivo) return;
+    const base64 = await comprimirImagem(arquivo);
+    setEdicao((prev) => ({ ...prev, imagem_base64: base64 }));
   }
 
   async function excluirPosicao(p: Posicao) {
@@ -309,12 +406,62 @@ export default function GerenciarPage() {
         </div>
       </Card>
 
+      <Card className="mb-6 border-accent/40">
+        <h2 className="mb-1 font-display text-base font-semibold tracking-wide text-ink">
+          CRIAR RUA COMPLETA (VÁRIAS COLUNAS DE UMA VEZ)
+        </h2>
+        <p className="mb-4 text-sm text-ink-dim">
+          Digite os tamanhos separados por vírgula — uma coluna é criada pra cada tamanho, já com os{" "}
+          {ANDARES_POR_COLUNA} andares preenchidos.
+        </p>
+        <form onSubmit={criarRuaCompleta} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Rua</span>
+            <input required value={loteRua} onChange={(e) => setLoteRua(e.target.value)} placeholder="A" className={classeInput} />
+          </label>
+          <label className="col-span-2 block min-w-0 sm:col-span-1 lg:col-span-2">
+            <span className="mb-1.5 block text-sm text-ink-dim">Produto</span>
+            <input value={loteProduto} onChange={(e) => setLoteProduto(e.target.value)} placeholder="Camisa Masc Home Mizuno 26/27" className={classeInput} />
+          </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Marca</span>
+            <input value={loteMarca} onChange={(e) => setLoteMarca(e.target.value)} placeholder="Mizuno" className={classeInput} />
+          </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Ano</span>
+            <input value={loteAno} onChange={(e) => setLoteAno(e.target.value)} placeholder="26/27" className={classeInput} />
+          </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Capacidade</span>
+            <input type="number" min={1} value={loteCapacidade} onChange={(e) => setLoteCapacidade(e.target.value)} className={classeInput} />
+          </label>
+          <label className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-6">
+            <span className="mb-1.5 block text-sm text-ink-dim">Tamanhos (um vira uma coluna, nessa ordem)</span>
+            <input
+              required
+              value={loteTamanhos}
+              onChange={(e) => setLoteTamanhos(e.target.value)}
+              placeholder="P, M, G, GG, 2GG, 4GG, 6GG"
+              className={classeInput}
+            />
+          </label>
+          <div className="col-span-2 flex items-end sm:col-span-3 lg:col-span-6">
+            <button type="submit" disabled={loteSalvando || !localAtivoId} className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60">
+              {loteSalvando ? "Criando…" : "Criar todas as colunas dessa rua"}
+            </button>
+          </div>
+        </form>
+        {loteErro && <p className="mt-3 rounded-lg border border-alert/40 bg-alert/10 px-3 py-2 text-sm text-alert">{loteErro}</p>}
+        {loteAviso && <p className="mt-3 rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-sm text-ok">{loteAviso}</p>}
+      </Card>
+
+      <div ref={formRef}>
       <Card className="mb-6">
         <h2 className="mb-4 font-display text-base font-semibold tracking-wide text-ink">NOVA POSIÇÃO</h2>
         <form onSubmit={criarPosicao} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <label className="col-span-1 block min-w-0">
             <span className="mb-1.5 block text-sm text-ink-dim">Coluna</span>
-            <input required value={form.codigo_coluna} onChange={(e) => setForm((f) => ({ ...f, codigo_coluna: e.target.value }))} placeholder="A-1" className={classeInput} />
+            <input required ref={colunaInputRef} value={form.codigo_coluna} onChange={(e) => setForm((f) => ({ ...f, codigo_coluna: e.target.value }))} placeholder="A-1" className={classeInput} />
           </label>
           <label className={`col-span-1 block min-w-0 ${form.aplicarTodosAndares ? "opacity-40" : ""}`}>
             <span className="mb-1.5 block text-sm text-ink-dim">Andar</span>
@@ -394,6 +541,7 @@ export default function GerenciarPage() {
         {erro && <p className="mt-3 rounded-lg border border-alert/40 bg-alert/10 px-3 py-2 text-sm text-alert">{erro}</p>}
         {aviso && <p className="mt-3 rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-sm text-ok">{aviso}</p>}
       </Card>
+      </div>
 
       {carregando ? (
         <p className="text-sm text-ink-dim">Carregando…</p>
@@ -429,13 +577,11 @@ export default function GerenciarPage() {
                     {itens.map((p) => {
                       const emEdicao = editandoId === p.id;
                       return (
-                        <tr key={p.id} className="border-b border-border last:border-0 hover:bg-surface-2/60">
-                          <td className="whitespace-nowrap px-4 py-2.5 text-ink">{p.codigo_coluna}</td>
-                          <td className="whitespace-nowrap px-4 py-2.5 text-ink">{p.andar}</td>
-                          <td className="px-4 py-2.5">
-                            {emEdicao ? (
-                              <input value={edicao.produto ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, produto: e.target.value }))} className={classeInput} />
-                            ) : (
+                        <Fragment key={p.id}>
+                          <tr className="border-b border-border last:border-0 hover:bg-surface-2/60">
+                            <td className="whitespace-nowrap px-4 py-2.5 text-ink">{p.codigo_coluna}</td>
+                            <td className="whitespace-nowrap px-4 py-2.5 text-ink">{p.andar}</td>
+                            <td className="px-4 py-2.5">
                               <span className="flex items-center gap-2 text-ink">
                                 {p.imagem_base64 && (
                                   // eslint-disable-next-line @next/next/no-img-element
@@ -443,54 +589,85 @@ export default function GerenciarPage() {
                                 )}
                                 {p.produto ?? "—"}
                               </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            {emEdicao ? (
-                              <input value={edicao.tamanho ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, tamanho: e.target.value }))} className={`${classeInput} w-24`} />
-                            ) : (
-                              <span className="text-ink">{p.tamanho ?? "—"}</span>
-                            )}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-2.5">
-                            {emEdicao ? (
-                              <input value={edicao.codigo_barras ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, codigo_barras: e.target.value }))} className={`${classeInput} w-36`} />
-                            ) : (
-                              <span className="font-mono text-xs text-ink-dim">{p.codigo_barras ?? "—"}</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            {emEdicao ? (
-                              <input type="number" value={edicao.capacidade ?? 40} onChange={(e) => setEdicao((prev) => ({ ...prev, capacidade: Number(e.target.value) }))} className={`${classeInput} w-20`} />
-                            ) : (
-                              <span className="text-ink">{p.capacidade}</span>
-                            )}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-2.5 text-ink">
-                            {p.quantidade_atual} / {p.capacidade}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-2.5">
-                            {emEdicao ? (
+                            </td>
+                            <td className="px-4 py-2.5 text-ink">{p.tamanho ?? "—"}</td>
+                            <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-ink-dim">
+                              {p.codigo_barras ?? "—"}
+                            </td>
+                            <td className="px-4 py-2.5 text-ink">{p.capacidade}</td>
+                            <td className="whitespace-nowrap px-4 py-2.5 text-ink">
+                              {p.quantidade_atual} / {p.capacidade}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-2.5">
                               <div className="flex gap-2">
-                                <button onClick={() => salvarEdicao(p.id)} disabled={salvando} className="rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-accent-ink">
-                                  Salvar
-                                </button>
-                                <button onClick={() => { setEditandoId(null); setEdicao({}); }} className="rounded-md border border-border px-2.5 py-1 text-xs text-ink-dim">
-                                  Cancelar
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex gap-2">
-                                <button onClick={() => abrirEdicao(p)} className="rounded-md border border-border px-2.5 py-1.5 text-ink-dim hover:text-ink" title="Editar">
+                                <button
+                                  onClick={() => (emEdicao ? (setEditandoId(null), setEdicao({})) : abrirEdicao(p))}
+                                  className={`rounded-md border px-2.5 py-1.5 ${
+                                    emEdicao ? "border-accent text-accent" : "border-border text-ink-dim hover:text-ink"
+                                  }`}
+                                  title="Editar"
+                                >
                                   ✎
                                 </button>
                                 <button onClick={() => excluirPosicao(p)} className="rounded-md border border-border px-2.5 py-1.5 text-ink-dim hover:border-alert hover:text-alert" title="Excluir">
                                   🗑
                                 </button>
                               </div>
-                            )}
-                          </td>
-                        </tr>
+                            </td>
+                          </tr>
+                          {emEdicao && (
+                            <tr className="border-b border-border bg-surface-2/40 last:border-0">
+                              <td colSpan={8} className="px-4 py-4">
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                                  <label className="col-span-2 block min-w-0 sm:col-span-1 lg:col-span-2">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Produto</span>
+                                    <input value={edicao.produto ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, produto: e.target.value }))} className={classeInput} />
+                                  </label>
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Tamanho</span>
+                                    <input value={edicao.tamanho ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, tamanho: e.target.value }))} className={classeInput} />
+                                  </label>
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Marca</span>
+                                    <input value={edicao.marca ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, marca: e.target.value }))} className={classeInput} />
+                                  </label>
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Ano</span>
+                                    <input value={edicao.ano ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, ano: e.target.value }))} className={classeInput} />
+                                  </label>
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Código de barras</span>
+                                    <input value={edicao.codigo_barras ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, codigo_barras: e.target.value }))} className={classeInput} />
+                                  </label>
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Capacidade</span>
+                                    <input type="number" min={1} value={edicao.capacidade ?? 40} onChange={(e) => setEdicao((prev) => ({ ...prev, capacidade: Number(e.target.value) }))} className={classeInput} />
+                                  </label>
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Quantidade atual</span>
+                                    <input type="number" min={0} value={edicao.quantidade_atual ?? 0} onChange={(e) => setEdicao((prev) => ({ ...prev, quantidade_atual: Number(e.target.value) }))} className={classeInput} />
+                                  </label>
+                                  <label className="col-span-2 block min-w-0 sm:col-span-2 lg:col-span-2">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Trocar foto</span>
+                                    <input type="file" accept="image/*" onChange={aoEscolherImagemEdicao} className={`${classeInput} p-1.5`} />
+                                  </label>
+                                  {edicao.imagem_base64 && (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={edicao.imagem_base64} alt="" className="col-span-1 h-10 w-10 self-end rounded object-cover" />
+                                  )}
+                                </div>
+                                <div className="mt-3 flex gap-2">
+                                  <button onClick={() => salvarEdicao(p.id)} disabled={salvando} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink disabled:opacity-60">
+                                    {salvando ? "Salvando…" : "Salvar"}
+                                  </button>
+                                  <button onClick={() => { setEditandoId(null); setEdicao({}); }} className="rounded-lg border border-border px-4 py-2 text-sm text-ink-dim">
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
