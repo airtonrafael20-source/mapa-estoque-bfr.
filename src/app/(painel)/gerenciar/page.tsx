@@ -63,12 +63,20 @@ export default function GerenciarPage() {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [processandoSelecao, setProcessandoSelecao] = useState(false);
 
+  interface LinhaLote {
+    tamanho: string;
+    codigoBarras: string;
+    quantidade: string;
+  }
+  const TAMANHOS_PADRAO = ["P", "M", "G", "GG", "2GG", "4GG", "6GG"];
   const [loteRua, setLoteRua] = useState("");
   const [loteProduto, setLoteProduto] = useState("");
   const [loteMarca, setLoteMarca] = useState("");
   const [loteAno, setLoteAno] = useState("");
   const [loteCapacidade, setLoteCapacidade] = useState("40");
-  const [loteTamanhos, setLoteTamanhos] = useState("P, M, G, GG, 2GG, 4GG, 6GG");
+  const [loteLinhas, setLoteLinhas] = useState<LinhaLote[]>(
+    TAMANHOS_PADRAO.map((tamanho) => ({ tamanho, codigoBarras: "", quantidade: "" }))
+  );
   const [loteSalvando, setLoteSalvando] = useState(false);
   const [loteErro, setLoteErro] = useState<string | null>(null);
   const [loteAviso, setLoteAviso] = useState<string | null>(null);
@@ -151,45 +159,60 @@ export default function GerenciarPage() {
     setTimeout(() => colunaInputRef.current?.focus(), 350);
   }
 
+  function atualizarLinhaLote(indice: number, campo: keyof LinhaLote, valor: string) {
+    setLoteLinhas((prev) => prev.map((linha, i) => (i === indice ? { ...linha, [campo]: valor } : linha)));
+  }
+
+  function adicionarLinhaLote() {
+    setLoteLinhas((prev) => [...prev, { tamanho: "", codigoBarras: "", quantidade: "" }]);
+  }
+
+  function removerLinhaLote(indice: number) {
+    setLoteLinhas((prev) => prev.filter((_, i) => i !== indice));
+  }
+
   async function criarRuaCompleta(e: React.FormEvent) {
     e.preventDefault();
     setLoteErro(null);
     setLoteAviso(null);
 
     const rua = loteRua.trim().toUpperCase();
-    const tamanhos = loteTamanhos
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const linhasValidas = loteLinhas.filter((l) => l.tamanho.trim());
 
-    if (!rua || tamanhos.length === 0 || !localAtivoId) {
+    if (!rua || linhasValidas.length === 0 || !localAtivoId) {
       setLoteErro("Preenche a rua e pelo menos um tamanho.");
       return;
     }
 
     setLoteSalvando(true);
+    const capacidadePorAndar = Number(loteCapacidade) || 40;
 
-    // Acha o próximo número de coluna livre nessa rua, e vai numerando
-    // uma coluna pra cada tamanho da lista (P → -1, M → -2, e assim por diante).
     const numerosExistentes = colunasExistentes
       .filter((c) => ruaDaColuna(c).toUpperCase() === rua)
       .map((c) => parseInt(c.split("-")[1] ?? "0", 10))
       .filter((n) => !isNaN(n));
     const proximoNumero = numerosExistentes.length > 0 ? Math.max(...numerosExistentes) + 1 : 1;
 
-    const linhas = tamanhos.flatMap((tamanho, indice) => {
+    const linhas = linhasValidas.flatMap((linha, indice) => {
       const codigo_coluna = `${rua}-${proximoNumero + indice}`;
-      return Array.from({ length: ANDARES_POR_COLUNA }, (_, i) => ({
-        local_id: localAtivoId,
-        codigo_coluna,
-        andar: i + 1,
-        produto: loteProduto.trim() || null,
-        tamanho,
-        marca: loteMarca.trim() || null,
-        ano: loteAno.trim() || null,
-        capacidade: Number(loteCapacidade) || 40,
-        quantidade_atual: 0,
-      }));
+      let restante = Math.max(0, Number(linha.quantidade) || 0);
+
+      return Array.from({ length: ANDARES_POR_COLUNA }, (_, i) => {
+        const nesseAndar = Math.min(restante, capacidadePorAndar);
+        restante -= nesseAndar;
+        return {
+          local_id: localAtivoId,
+          codigo_coluna,
+          andar: i + 1,
+          produto: loteProduto.trim() || null,
+          tamanho: linha.tamanho.trim(),
+          marca: loteMarca.trim() || null,
+          ano: loteAno.trim() || null,
+          codigo_barras: linha.codigoBarras.trim() || null,
+          capacidade: capacidadePorAndar,
+          quantidade_atual: nesseAndar,
+        };
+      });
     });
 
     const { error } = await supabase
@@ -202,11 +225,12 @@ export default function GerenciarPage() {
       return;
     }
 
+    const codigosCriados = linhasValidas.map((_, i) => `${rua}-${proximoNumero + i}`);
     const { data: novas } = await supabase
       .from("posicoes")
       .select("*")
       .eq("local_id", localAtivoId)
-      .in("codigo_coluna", tamanhos.map((_, i) => `${rua}-${proximoNumero + i}`));
+      .in("codigo_coluna", codigosCriados);
 
     setPosicoes((prev) => {
       const idsNovos = new Set((novas as Posicao[] | null)?.map((p) => p.id));
@@ -215,11 +239,12 @@ export default function GerenciarPage() {
 
     setLoteSalvando(false);
     setLoteAviso(
-      `Rua ${rua}: criadas ${tamanhos.length} colunas (${rua}-${proximoNumero} a ${rua}-${
-        proximoNumero + tamanhos.length - 1
-      }), 1 tamanho por coluna, ${ANDARES_POR_COLUNA} andares cada.`
+      `Rua ${rua}: criadas ${linhasValidas.length} colunas (${rua}-${proximoNumero} a ${rua}-${
+        proximoNumero + linhasValidas.length - 1
+      }), com código de barras e quantidade já preenchidos.`
     );
     setLoteProduto("");
+    setLoteLinhas(TAMANHOS_PADRAO.map((tamanho) => ({ tamanho, codigoBarras: "", quantidade: "" })));
     setTimeout(() => setLoteAviso(null), 6000);
   }
 
@@ -493,8 +518,9 @@ export default function GerenciarPage() {
           CRIAR RUA COMPLETA (VÁRIAS COLUNAS DE UMA VEZ)
         </h2>
         <p className="mb-4 text-sm text-ink-dim">
-          Digite os tamanhos separados por vírgula — uma coluna é criada pra cada tamanho, já com os{" "}
-          {ANDARES_POR_COLUNA} andares preenchidos.
+          Uma linha vira uma coluna — preenche tamanho, código de barras e quantidade final de cada um, e ele
+          já cria tudo com os {ANDARES_POR_COLUNA} andares preenchidos (distribuindo a quantidade pelos
+          andares conforme a capacidade).
         </p>
         <form onSubmit={criarRuaCompleta} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <label className="col-span-1 block min-w-0">
@@ -518,14 +544,50 @@ export default function GerenciarPage() {
             <input type="number" min={1} value={loteCapacidade} onChange={(e) => setLoteCapacidade(e.target.value)} className={classeInput} />
           </label>
           <label className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-6">
-            <span className="mb-1.5 block text-sm text-ink-dim">Tamanhos (um vira uma coluna, nessa ordem)</span>
-            <input
-              required
-              value={loteTamanhos}
-              onChange={(e) => setLoteTamanhos(e.target.value)}
-              placeholder="P, M, G, GG, 2GG, 4GG, 6GG"
-              className={classeInput}
-            />
+            <span className="mb-1.5 block text-sm text-ink-dim">Tamanhos, código de barras e quantidade</span>
+            <div className="flex flex-col gap-2">
+              {loteLinhas.map((linha, i) => (
+                <div key={i} className="grid grid-cols-3 gap-2">
+                  <input
+                    value={linha.tamanho}
+                    onChange={(e) => atualizarLinhaLote(i, "tamanho", e.target.value)}
+                    placeholder="Tamanho (P)"
+                    className={classeInput}
+                  />
+                  <input
+                    value={linha.codigoBarras}
+                    onChange={(e) => atualizarLinhaLote(i, "codigoBarras", e.target.value)}
+                    placeholder="Código de barras"
+                    className={classeInput}
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      value={linha.quantidade}
+                      onChange={(e) => atualizarLinhaLote(i, "quantidade", e.target.value)}
+                      placeholder="Qtd. final"
+                      className={classeInput}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removerLinhaLote(i)}
+                      title="Remover esse tamanho"
+                      className="shrink-0 rounded-lg border border-border px-3 text-ink-dim hover:border-alert hover:text-alert"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={adicionarLinhaLote}
+              className="mt-2 rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent"
+            >
+              + Adicionar tamanho
+            </button>
           </label>
           <div className="col-span-2 flex items-end sm:col-span-3 lg:col-span-6">
             <button type="submit" disabled={loteSalvando || !localAtivoId} className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-60">
