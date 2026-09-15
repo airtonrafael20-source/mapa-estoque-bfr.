@@ -60,6 +60,9 @@ export default function GerenciarPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [edicao, setEdicao] = useState<Partial<Posicao>>({});
 
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [processandoSelecao, setProcessandoSelecao] = useState(false);
+
   const [loteRua, setLoteRua] = useState("");
   const [loteProduto, setLoteProduto] = useState("");
   const [loteMarca, setLoteMarca] = useState("");
@@ -344,6 +347,85 @@ export default function GerenciarPage() {
     await supabase.from("posicoes").delete().eq("id", p.id);
   }
 
+  function alternarSelecao(id: string) {
+    setSelecionados((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  }
+
+  function selecionarTodosDaRua(itensRua: Posicao[], marcar: boolean) {
+    setSelecionados((prev) => {
+      const novo = new Set(prev);
+      for (const p of itensRua) {
+        if (marcar) novo.add(p.id);
+        else novo.delete(p.id);
+      }
+      return novo;
+    });
+  }
+
+  async function excluirSelecionados() {
+    if (selecionados.size === 0) return;
+    if (!window.confirm(`Excluir ${selecionados.size} posições selecionadas? Isso não pode ser desfeito.`)) return;
+    setProcessandoSelecao(true);
+    const ids = Array.from(selecionados);
+    setPosicoes((prev) => prev.filter((p) => !selecionados.has(p.id)));
+    await supabase.from("posicoes").delete().in("id", ids);
+    setSelecionados(new Set());
+    setProcessandoSelecao(false);
+  }
+
+  async function limparSelecionados() {
+    if (selecionados.size === 0) return;
+    if (
+      !window.confirm(
+        `Limpar ${selecionados.size} posições selecionadas? Isso apaga o produto/tamanho/foto e zera a quantidade, mas mantém a posição cadastrada (coluna e andar continuam existindo, vazios).`
+      )
+    )
+      return;
+    setProcessandoSelecao(true);
+    const ids = Array.from(selecionados);
+    const limpo = {
+      produto: null,
+      tamanho: null,
+      marca: null,
+      ano: null,
+      codigo_barras: null,
+      imagem_base64: null,
+      quantidade_atual: 0,
+    };
+    setPosicoes((prev) => prev.map((p) => (selecionados.has(p.id) ? { ...p, ...limpo } : p)));
+    await supabase.from("posicoes").update(limpo).in("id", ids);
+    setSelecionados(new Set());
+    setProcessandoSelecao(false);
+  }
+
+  async function moverColuna(codigoAtual: string) {
+    const novoCodigo = window.prompt(`Mover a coluna "${codigoAtual}" (com todos os andares) para qual código?`, codigoAtual);
+    if (!novoCodigo || novoCodigo.trim().toUpperCase() === codigoAtual) return;
+    const destino = novoCodigo.trim().toUpperCase();
+
+    const { error } = await supabase
+      .from("posicoes")
+      .update({ codigo_coluna: destino })
+      .eq("codigo_coluna", codigoAtual)
+      .eq("local_id", localAtivoId);
+
+    if (error) {
+      window.alert(
+        `Não consegui mover — provavelmente já existe uma coluna "${destino}" com andares que colidem com os dessa.`
+      );
+      return;
+    }
+
+    setPosicoes((prev) =>
+      prev.map((p) => (p.codigo_coluna === codigoAtual && p.local_id === localAtivoId ? { ...p, codigo_coluna: destino } : p))
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -551,18 +633,84 @@ export default function GerenciarPage() {
         </Card>
       ) : (
         <div className="flex flex-col gap-5">
-          {porRua.map(([rua, itens]) => (
-            <Card key={rua} className="p-0">
-              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-                <h3 className="font-display text-lg font-semibold tracking-wide text-ink">Rua {rua}</h3>
-                <button type="button" onClick={() => preencherProximaColuna(rua)} className="shrink-0 rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent">
-                  + Nova coluna nessa rua
+          {selecionados.size > 0 && (
+            <Card className="sticky top-2 z-10 flex flex-wrap items-center justify-between gap-3 border-accent/40 bg-surface py-3">
+              <p className="text-sm text-ink">
+                <span className="font-semibold text-accent">{selecionados.size}</span> selecionada
+                {selecionados.size === 1 ? "" : "s"}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={limparSelecionados}
+                  disabled={processandoSelecao}
+                  className="rounded-lg border border-pend px-3 py-1.5 text-sm font-semibold text-pend disabled:opacity-60"
+                >
+                  Limpar selecionadas
+                </button>
+                <button
+                  onClick={excluirSelecionados}
+                  disabled={processandoSelecao}
+                  className="rounded-lg border border-alert px-3 py-1.5 text-sm font-semibold text-alert disabled:opacity-60"
+                >
+                  Excluir selecionadas
+                </button>
+                <button
+                  onClick={() => setSelecionados(new Set())}
+                  className="rounded-lg border border-border px-3 py-1.5 text-sm text-ink-dim"
+                >
+                  Limpar seleção
                 </button>
               </div>
+            </Card>
+          )}
+
+          {porRua.map(([rua, itens]) => {
+            const todosSelecionados = itens.every((p) => selecionados.has(p.id));
+            const colunasNaRua = Array.from(new Set(itens.map((p) => p.codigo_coluna)));
+            return (
+            <Card key={rua} className="p-0">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={todosSelecionados}
+                    onChange={(e) => selecionarTodosDaRua(itens, e.target.checked)}
+                    title="Selecionar todos os andares dessa rua"
+                    className="h-4 w-4 accent-accent"
+                  />
+                  <h3 className="font-display text-lg font-semibold tracking-wide text-ink">Rua {rua}</h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {colunasNaRua.length > 0 && (
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) moverColuna(e.target.value);
+                        e.target.value = "";
+                      }}
+                      defaultValue=""
+                      className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-xs text-ink-dim"
+                      title="Mover/renomear uma coluna inteira"
+                    >
+                      <option value="" disabled>
+                        ↦ Mover coluna…
+                      </option>
+                      {colunasNaRua.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button type="button" onClick={() => preencherProximaColuna(rua)} className="shrink-0 rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent">
+                    + Nova coluna nessa rua
+                  </button>
+                </div>
+              </div>
               <div className="scroll-safe max-w-full">
-                <table className="w-full min-w-[900px] border-collapse text-sm">
+                <table className="w-full min-w-[940px] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-border text-left text-ink-dim">
+                      <th className="w-8 px-4 py-2.5"></th>
                       <th className="whitespace-nowrap px-4 py-2.5 font-medium">Coluna</th>
                       <th className="whitespace-nowrap px-4 py-2.5 font-medium">Andar</th>
                       <th className="px-4 py-2.5 font-medium">Produto</th>
@@ -579,6 +727,14 @@ export default function GerenciarPage() {
                       return (
                         <Fragment key={p.id}>
                           <tr className="border-b border-border last:border-0 hover:bg-surface-2/60">
+                            <td className="px-4 py-2.5">
+                              <input
+                                type="checkbox"
+                                checked={selecionados.has(p.id)}
+                                onChange={() => alternarSelecao(p.id)}
+                                className="h-4 w-4 accent-accent"
+                              />
+                            </td>
                             <td className="whitespace-nowrap px-4 py-2.5 text-ink">{p.codigo_coluna}</td>
                             <td className="whitespace-nowrap px-4 py-2.5 text-ink">{p.andar}</td>
                             <td className="px-4 py-2.5">
@@ -617,7 +773,7 @@ export default function GerenciarPage() {
                           </tr>
                           {emEdicao && (
                             <tr className="border-b border-border bg-surface-2/40 last:border-0">
-                              <td colSpan={8} className="px-4 py-4">
+                              <td colSpan={9} className="px-4 py-4">
                                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                                   <label className="col-span-2 block min-w-0 sm:col-span-1 lg:col-span-2">
                                     <span className="mb-1.5 block text-xs text-ink-dim">Produto</span>
@@ -674,7 +830,8 @@ export default function GerenciarPage() {
                 </table>
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
