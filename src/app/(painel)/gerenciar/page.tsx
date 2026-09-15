@@ -355,10 +355,11 @@ export default function GerenciarPage() {
             <span className="mb-1.5 block text-sm text-ink-dim">Capacidade</span>
             <input type="number" min={1} value={form.capacidade} onChange={(e) => setForm((f) => ({ ...f, capacidade: e.target.value }))} className={classeInput} />
           </label>
-          <label className={`col-span-1 block min-w-0 ${form.aplicarTodosAndares ? "opacity-40" : ""}`}>
-            <span className="mb-1.5 block text-sm text-ink-dim">Qtd. inicial</span>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">
+              Qtd. inicial{form.aplicarTodosAndares ? " (por andar)" : ""}
+            </span>
             <input
-              disabled={form.aplicarTodosAndares}
               type="number"
               min={0}
               value={form.quantidade_atual}
