@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import LogoUploader from "@/components/LogoUploader";
 import {
+  IconBarcode,
   IconLayoutGrid,
   IconLogout,
   IconMenu2,
@@ -15,6 +17,7 @@ import {
 
 const ITENS = [
   { href: "/", rotulo: "Mapa", icone: IconLayoutGrid },
+  { href: "/bipar", rotulo: "Bipar", icone: IconBarcode },
   { href: "/buscar", rotulo: "Buscar produto", icone: IconSearch },
   { href: "/gerenciar", rotulo: "Gerenciar posições", icone: IconSettings },
   { href: "/etiquetas", rotulo: "Etiquetas / QR", icone: IconPrinter },
@@ -35,9 +38,7 @@ export default function Sidebar({ nome }: { nome: string }) {
   const conteudoNav = (
     <>
       <div className="mb-6 flex items-center gap-3 px-1">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-accent text-accent">
-          <span className="font-display text-sm font-bold">BF</span>
-        </div>
+        <LogoUploader tamanho={40} />
         <div className="min-w-0">
           <p className="font-display text-sm font-semibold tracking-wide text-ink truncate">
             MAPA DE ESTOQUE
@@ -85,9 +86,7 @@ export default function Sidebar({ nome }: { nome: string }) {
     <>
       <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 print:hidden lg:hidden">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-accent text-accent">
-            <span className="font-display text-xs font-bold">BF</span>
-          </div>
+          <LogoUploader tamanho={32} editavel={false} />
           <span className="truncate font-display text-sm font-semibold tracking-wide">MAPA DE ESTOQUE</span>
         </div>
         <button

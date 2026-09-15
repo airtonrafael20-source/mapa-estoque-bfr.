@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   Posicao,
   carinhaOcupacao,
-  descricaoProduto,
+  descricaoCompleta,
   nivelOcupacao,
 } from "@/lib/types";
 
@@ -37,7 +37,6 @@ export default function PosicaoPage({
 
     async function carregar() {
       const { data } = await supabase
-        
         .from("posicoes")
         .select("*")
         .eq("codigo_coluna", codigoColuna)
@@ -67,9 +66,8 @@ export default function PosicaoPage({
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return "Usuário";
+    if (!user) return "Sem login (QR)";
     const { data: perfil } = await supabase
-      
       .from("perfis")
       .select("nome")
       .eq("id", user.id)
@@ -79,14 +77,19 @@ export default function PosicaoPage({
 
   async function ajustar(delta: number, tipo: "retirada" | "reposicao") {
     if (!posicao || ajustando) return;
+
+    const novaQtd = Math.max(0, Math.min(posicao.capacidade, posicao.quantidade_atual + delta));
+    const confirmou = window.confirm(
+      `Quantidade atual: ${posicao.quantidade_atual}\nNova quantidade: ${novaQtd}\n\nConfirma o ajuste?`
+    );
+    if (!confirmou) return;
+
     setAjustando(true);
     setMensagem(null);
 
-    const novaQtd = Math.max(0, Math.min(posicao.capacidade, posicao.quantidade_atual + delta));
     const nome = await registrarNome();
 
     await supabase
-      
       .from("posicoes")
       .update({ quantidade_atual: novaQtd, atualizado_em: new Date().toISOString() })
       .eq("id", posicao.id);
@@ -113,11 +116,16 @@ export default function PosicaoPage({
       setQuantidadeManual("");
       return;
     }
+
+    const confirmou = window.confirm(
+      `Quantidade atual: ${posicao.quantidade_atual}\nNova quantidade: ${valor}\n\nConfirma o ajuste?`
+    );
+    if (!confirmou) return;
+
     setAjustando(true);
     const nome = await registrarNome();
 
     await supabase
-      
       .from("posicoes")
       .update({ quantidade_atual: valor, atualizado_em: new Date().toISOString() })
       .eq("id", posicao.id);
@@ -168,8 +176,11 @@ export default function PosicaoPage({
         {posicao.codigo_coluna} · Andar {posicao.andar}
       </p>
       <h1 className="mb-1 max-w-sm break-words font-display text-2xl font-bold text-ink">
-        {descricaoProduto(posicao)}
+        {descricaoCompleta(posicao)}
       </h1>
+      {posicao.codigo_barras && (
+        <p className="mb-1 font-mono text-xs text-ink-dim">Cód. barras: {posicao.codigo_barras}</p>
+      )}
 
       <div className="my-6">
         <span className="text-7xl" aria-hidden>

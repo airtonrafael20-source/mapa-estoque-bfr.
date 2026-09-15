@@ -16,7 +16,6 @@ export default function BuscarPage() {
     let ativo = true;
     async function carregar() {
       const { data } = await supabase
-        
         .from("posicoes")
         .select("*")
         .order("codigo_coluna", { ascending: true });

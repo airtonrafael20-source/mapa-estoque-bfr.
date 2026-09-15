@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const ROTAS_PUBLICAS = ["/login"];
+// /login: some quando já logado (redireciona pra "/").
+// /posicao: acessível sempre, logado ou não — nunca redireciona.
+const ROTAS_LOGIN = ["/login"];
+const ROTAS_SEMPRE_ABERTAS = ["/posicao"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -31,17 +34,21 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const rotaPublica = ROTAS_PUBLICAS.some((rota) =>
-    request.nextUrl.pathname.startsWith(rota)
-  );
+  const path = request.nextUrl.pathname;
+  const rotaSempreAberta = ROTAS_SEMPRE_ABERTAS.some((r) => path.startsWith(r));
+  const rotaLogin = ROTAS_LOGIN.some((r) => path.startsWith(r));
 
-  if (!user && !rotaPublica) {
+  if (rotaSempreAberta) {
+    return response;
+  }
+
+  if (!user && !rotaLogin) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && rotaPublica) {
+  if (user && rotaLogin) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

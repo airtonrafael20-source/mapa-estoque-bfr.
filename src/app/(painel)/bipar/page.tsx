@@ -1,0 +1,216 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { Posicao, descricaoProduto } from "@/lib/types";
+import { Card, PageHeader } from "@/components/ui";
+
+type Estado = "lendo" | "buscando" | "nao_encontrado" | "erro_camera";
+
+export default function BiparPage() {
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+  const divRef = useRef<HTMLDivElement>(null);
+  const scannerRef = useRef<import("html5-qrcode").Html5Qrcode | null>(null);
+  const processandoRef = useRef(false);
+
+  const [estado, setEstado] = useState<Estado>("lendo");
+  const [codigoLido, setCodigoLido] = useState("");
+  const [opcoes, setOpcoes] = useState<Posicao[]>([]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function iniciar() {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      if (!ativo || !divRef.current) return;
+
+      const scanner = new Html5Qrcode(divRef.current.id, {
+        formatsToSupport: undefined, // aceita QR e a maioria dos códigos de barras (EAN-13, Code128...)
+        verbose: false,
+      });
+      scannerRef.current = scanner;
+
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 260, height: 160 } },
+          async (textoLido) => {
+            if (processandoRef.current) return;
+            processandoRef.current = true;
+            await tratarLeitura(textoLido);
+            processandoRef.current = false;
+          },
+          () => {
+            /* frame sem leitura — ignora */
+          }
+        );
+      } catch {
+        if (ativo) setEstado("erro_camera");
+      }
+    }
+
+    iniciar();
+
+    return () => {
+      ativo = false;
+      scannerRef.current
+        ?.stop()
+        .then(() => scannerRef.current?.clear())
+        .catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function pararCamera() {
+    try {
+      await scannerRef.current?.stop();
+      await scannerRef.current?.clear();
+    } catch {
+      /* já parado */
+    }
+  }
+
+  async function tratarLeitura(texto: string) {
+    // Se for o QR de uma posição nossa (contém /posicao/), navega direto pra lá.
+    const marcador = "/posicao/";
+    const indice = texto.indexOf(marcador);
+    if (indice !== -1) {
+      await pararCamera();
+      router.push(texto.slice(indice));
+      return;
+    }
+
+    // Senão, trata como código de barras do produto — busca no banco.
+    setEstado("buscando");
+    setCodigoLido(texto);
+
+    const { data } = await supabase
+      .from("posicoes")
+      .select("*")
+      .eq("codigo_barras", texto.trim());
+
+    const encontradas = (data as Posicao[]) ?? [];
+
+    if (encontradas.length === 1) {
+      await pararCamera();
+      router.push(`/posicao/${encodeURIComponent(encontradas[0].codigo_coluna)}/${encontradas[0].andar}`);
+      return;
+    }
+
+    if (encontradas.length > 1) {
+      await pararCamera();
+      setOpcoes(encontradas);
+      setEstado("nao_encontrado"); // reaproveita a tela pra listar as opções
+      return;
+    }
+
+    await pararCamera();
+    setOpcoes([]);
+    setEstado("nao_encontrado");
+  }
+
+  async function tentarDeNovo() {
+    setEstado("lendo");
+    setOpcoes([]);
+    processandoRef.current = false;
+    const { Html5Qrcode } = await import("html5-qrcode");
+    if (!divRef.current) return;
+    const scanner = new Html5Qrcode(divRef.current.id);
+    scannerRef.current = scanner;
+    try {
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 260, height: 160 } },
+        async (textoLido) => {
+          if (processandoRef.current) return;
+          processandoRef.current = true;
+          await tratarLeitura(textoLido);
+          processandoRef.current = false;
+        },
+        () => {}
+      );
+    } catch {
+      setEstado("erro_camera");
+    }
+  }
+
+  return (
+    <div>
+      <PageHeader
+        titulo="Bipar"
+        subtitulo="Aponte pro QR do cesto ou pro código de barras do produto."
+      />
+
+      <Card>
+        <div
+          id="leitor-camera"
+          ref={divRef}
+          className="mx-auto w-full max-w-sm overflow-hidden rounded-xl bg-black"
+          style={{ minHeight: estado === "lendo" ? 260 : 0 }}
+        />
+
+        {estado === "buscando" && (
+          <p className="mt-4 text-center text-ink-dim">Procurando &quot;{codigoLido}&quot;…</p>
+        )}
+
+        {estado === "erro_camera" && (
+          <div className="mt-4 text-center">
+            <p className="text-alert">
+              Não consegui acessar a câmera. Confirma se você deu permissão pro navegador usar a câmera.
+            </p>
+            <button
+              onClick={tentarDeNovo}
+              className="mt-3 rounded-lg border border-accent px-4 py-2 font-semibold text-accent"
+            >
+              Tentar de novo
+            </button>
+          </div>
+        )}
+
+        {estado === "nao_encontrado" && (
+          <div className="mt-4">
+            {opcoes.length === 0 ? (
+              <div className="text-center">
+                <p className="text-ink-dim">
+                  Código <span className="font-mono text-ink">{codigoLido}</span> não está cadastrado em
+                  nenhuma posição.
+                </p>
+                <div className="mt-3 flex justify-center gap-3">
+                  <Link href="/gerenciar" className="rounded-lg border border-accent px-4 py-2 font-semibold text-accent">
+                    Cadastrar em Gerenciar
+                  </Link>
+                  <button
+                    onClick={tentarDeNovo}
+                    className="rounded-lg border border-border px-4 py-2 text-ink-dim"
+                  >
+                    Ler de novo
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="mb-2 text-center text-sm text-ink-dim">
+                  Esse código está em mais de uma posição, escolha:
+                </p>
+                <div className="flex flex-col gap-2">
+                  {opcoes.map((p) => (
+                    <Link
+                      key={p.id}
+                      href={`/posicao/${encodeURIComponent(p.codigo_coluna)}/${p.andar}`}
+                      className="rounded-lg border border-border px-3 py-2 text-ink hover:border-accent"
+                    >
+                      {p.codigo_coluna} · Andar {p.andar} — {descricaoProduto(p)}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}

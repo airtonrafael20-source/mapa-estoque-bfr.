@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import LogoUploader from "@/components/LogoUploader";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,8 +38,8 @@ export default function LoginPage() {
     <main className="min-h-screen w-full flex items-center justify-center bg-bg px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border-2 border-accent text-accent">
-            <span className="font-display text-xl font-bold">BF</span>
+          <div className="mx-auto mb-4 flex justify-center">
+            <LogoUploader tamanho={56} editavel={false} />
           </div>
           <h1 className="font-display text-2xl font-semibold tracking-wide text-ink break-words">
             MAPA DE ESTOQUE

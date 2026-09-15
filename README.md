@@ -59,3 +59,48 @@ pasta pela interface do site).
     cp .env.local.example .env.local   # preencha com os valores do Supabase
     npm install
     npm run dev
+
+## Atualização — código de barras, bipagem e QR sem login
+
+Essa leva de mudanças pede uma migração nova no banco. No SQL Editor,
+rode só o trecho novo (está no final do `sql/schema.sql`, a partir de
+`-- Código de barras do produto + cestos com 6 espaços`) — não precisa
+rodar o arquivo inteiro de novo.
+
+**O que mudou:**
+
+- **Bipar** (novo item no menu) — abre a câmera do celular e lê tanto o
+  QR de uma posição quanto o código de barras de um produto. Se o
+  código bater com um produto cadastrado, abre direto a tela de ajuste.
+- Cada posição agora tem **código de barras, marca e ano**.
+- **Logo editável** — clica no círculo do menu/login pra trocar pelo
+  escudo real.
+- **Local renomeável** — o lápis do lado do seletor de Local.
+- **Mapa** mostra o **total por coluna** e o **total geral** no topo.
+- Cards do Mapa agora têm cara de cesto empilhado de verdade.
+- **QR sem login**: abrir o QR de uma posição não pede mais senha —
+  ajusta a quantidade na hora, com um aviso mostrando "quantidade atual
+  → nova quantidade" antes de confirmar. Isso significa que qualquer
+  pessoa com acesso físico ao QR consegue ajustar o estoque, sem
+  registrar quem foi (o histórico salva "Sem login (QR)"). Se um dia
+  quiser voltar a exigir login nessa tela, é só avisar.
+- **Etiquetas** agora imprimem o código de barras de verdade (não só o
+  número) junto do QR e da descrição completa (produto, tamanho, marca,
+  ano).
+
+### Sobre funcionar 100% offline (sem internet)
+
+O que está pronto hoje precisa de internet (mesmo fraca) pra salvar o
+ajuste na hora. Funcionar de verdade sem nenhuma internet (guardando o
+ajuste no celular e sincronizando sozinho quando a conexão voltar) é
+uma etapa maior, tipo um app instalável com fila de sincronização — dá
+pra construir depois, como um projeto à parte.
+
+### Sugestão de leitor de código de barras físico
+
+Pra bipar mais rápido que apontando o celular, um leitor de código de
+barras USB ou Bluetooth (tipo os de caixa de supermercado) funciona
+direto no navegador sem instalar nada — ele "digita" o código
+automaticamente, como se fosse um teclado. Modelos simples (ex.:
+leitores CCD/laser genéricos, ~R$80–150) já resolvem. Se comprar um,
+é só focar no campo de busca do **Buscar produto** e bipar.

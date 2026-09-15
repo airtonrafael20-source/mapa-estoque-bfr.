@@ -10,6 +10,9 @@ interface FormNovo {
   andar: string;
   produto: string;
   tamanho: string;
+  marca: string;
+  ano: string;
+  codigo_barras: string;
   capacidade: string;
   quantidade_atual: string;
 }
@@ -19,6 +22,9 @@ const FORM_VAZIO: FormNovo = {
   andar: "1",
   produto: "",
   tamanho: "",
+  marca: "",
+  ano: "",
+  codigo_barras: "",
   capacidade: "40",
   quantidade_atual: "0",
 };
@@ -31,6 +37,8 @@ export default function GerenciarPage() {
   const [locais, setLocais] = useState<Local[]>([]);
   const [localAtivoId, setLocalAtivoId] = useState<string>("");
   const [novoLocal, setNovoLocal] = useState("");
+  const [editandoLocalNome, setEditandoLocalNome] = useState("");
+  const [editandoLocal, setEditandoLocal] = useState(false);
 
   const [posicoes, setPosicoes] = useState<Posicao[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -79,7 +87,6 @@ export default function GerenciarPage() {
   async function adicionarLocal() {
     if (!novoLocal.trim()) return;
     const { data, error } = await supabase
-      
       .from("locais")
       .insert({ nome: novoLocal.trim() })
       .select()
@@ -88,6 +95,12 @@ export default function GerenciarPage() {
       setLocalAtivoId((data as Local).id);
       setNovoLocal("");
     }
+  }
+
+  async function renomearLocal() {
+    if (!editandoLocalNome.trim() || !localAtivoId) return;
+    await supabase.from("locais").update({ nome: editandoLocalNome.trim() }).eq("id", localAtivoId);
+    setEditandoLocal(false);
   }
 
   const posicoesDoLocal = useMemo(
@@ -128,6 +141,9 @@ export default function GerenciarPage() {
       andar: Number(form.andar),
       produto: form.produto.trim() || null,
       tamanho: form.tamanho.trim() || null,
+      marca: form.marca.trim() || null,
+      ano: form.ano.trim() || null,
+      codigo_barras: form.codigo_barras.trim() || null,
       capacidade: Number(form.capacidade) || 40,
       quantidade_atual: Number(form.quantidade_atual) || 0,
     });
@@ -154,6 +170,7 @@ export default function GerenciarPage() {
     const atualizacao = {
       produto: edicao.produto || null,
       tamanho: edicao.tamanho || null,
+      codigo_barras: edicao.codigo_barras || null,
       capacidade: Number(edicao.capacidade) || 40,
       observacoes: edicao.observacoes || null,
     };
@@ -180,17 +197,56 @@ export default function GerenciarPage() {
         <div className="flex flex-wrap items-end gap-3">
           <label className="block min-w-0 flex-1">
             <span className="mb-1.5 block text-sm text-ink-dim">Local / galpão</span>
-            <select
-              value={localAtivoId}
-              onChange={(e) => setLocalAtivoId(e.target.value)}
-              className={classeInput}
-            >
-              {locais.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.nome}
-                </option>
-              ))}
-            </select>
+            {editandoLocal ? (
+              <div className="flex gap-2">
+                <input
+                  value={editandoLocalNome}
+                  onChange={(e) => setEditandoLocalNome(e.target.value)}
+                  className={classeInput}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={renomearLocal}
+                  className="shrink-0 rounded-lg bg-accent px-3 py-2.5 text-sm font-semibold text-accent-ink"
+                >
+                  Salvar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditandoLocal(false)}
+                  className="shrink-0 rounded-lg border border-border px-3 py-2.5 text-sm text-ink-dim"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <select
+                  value={localAtivoId}
+                  onChange={(e) => setLocalAtivoId(e.target.value)}
+                  className={classeInput}
+                >
+                  {locais.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.nome}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const atual = locais.find((l) => l.id === localAtivoId);
+                    setEditandoLocalNome(atual?.nome ?? "");
+                    setEditandoLocal(true);
+                  }}
+                  title="Renomear esse local"
+                  className="shrink-0 rounded-lg border border-border px-3 py-2.5 text-ink-dim hover:text-ink"
+                >
+                  ✎
+                </button>
+              </div>
+            )}
           </label>
           <label className="block min-w-0 flex-1">
             <span className="mb-1.5 block text-sm text-ink-dim">Adicionar novo local</span>
@@ -235,7 +291,7 @@ export default function GerenciarPage() {
               onChange={(e) => setForm((f) => ({ ...f, andar: e.target.value }))}
               className={classeInput}
             >
-              {[1, 2, 3, 4, 5].map((n) => (
+              {[1, 2, 3, 4, 5, 6].map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>
@@ -257,6 +313,33 @@ export default function GerenciarPage() {
               value={form.tamanho}
               onChange={(e) => setForm((f) => ({ ...f, tamanho: e.target.value }))}
               placeholder="P, M, GG…"
+              className={classeInput}
+            />
+          </label>
+          <label className="col-span-2 block min-w-0 sm:col-span-1 lg:col-span-2">
+            <span className="mb-1.5 block text-sm text-ink-dim">Código de barras</span>
+            <input
+              value={form.codigo_barras}
+              onChange={(e) => setForm((f) => ({ ...f, codigo_barras: e.target.value }))}
+              placeholder="7908225543551"
+              className={classeInput}
+            />
+          </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Marca</span>
+            <input
+              value={form.marca}
+              onChange={(e) => setForm((f) => ({ ...f, marca: e.target.value }))}
+              placeholder="Mizuno"
+              className={classeInput}
+            />
+          </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Ano</span>
+            <input
+              value={form.ano}
+              onChange={(e) => setForm((f) => ({ ...f, ano: e.target.value }))}
+              placeholder="26/27"
               className={classeInput}
             />
           </label>
@@ -321,13 +404,14 @@ export default function GerenciarPage() {
                 </button>
               </div>
               <div className="scroll-safe max-w-full">
-                <table className="w-full min-w-[780px] border-collapse text-sm">
+                <table className="w-full min-w-[900px] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-border text-left text-ink-dim">
                       <th className="whitespace-nowrap px-4 py-2.5 font-medium">Coluna</th>
                       <th className="whitespace-nowrap px-4 py-2.5 font-medium">Andar</th>
                       <th className="px-4 py-2.5 font-medium">Produto</th>
                       <th className="whitespace-nowrap px-4 py-2.5 font-medium">Tamanho</th>
+                      <th className="whitespace-nowrap px-4 py-2.5 font-medium">Cód. barras</th>
                       <th className="whitespace-nowrap px-4 py-2.5 font-medium">Capacidade</th>
                       <th className="whitespace-nowrap px-4 py-2.5 font-medium">Qtd. atual</th>
                       <th className="whitespace-nowrap px-4 py-2.5 font-medium">Ações</th>
@@ -360,6 +444,19 @@ export default function GerenciarPage() {
                               />
                             ) : (
                               <span className="text-ink">{p.tamanho ?? "—"}</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5">
+                            {emEdicao ? (
+                              <input
+                                value={edicao.codigo_barras ?? ""}
+                                onChange={(e) =>
+                                  setEdicao((prev) => ({ ...prev, codigo_barras: e.target.value }))
+                                }
+                                className={`${classeInput} w-36`}
+                              />
+                            ) : (
+                              <span className="font-mono text-xs text-ink-dim">{p.codigo_barras ?? "—"}</span>
                             )}
                           </td>
                           <td className="px-4 py-2.5">

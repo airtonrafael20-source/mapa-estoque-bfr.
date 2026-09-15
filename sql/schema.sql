@@ -106,3 +106,54 @@ alter publication supabase_realtime add table movimentacoes;
 -- liberado por padrão em projeto novo.
 -- Só falta: Authentication → Users → Add user (seu login).
 -- ============================================================
+
+-- ------------------------------------------------------------
+-- Código de barras do produto + cestos com 6 espaços (era 5)
+-- ------------------------------------------------------------
+alter table posicoes
+  add column if not exists codigo_barras text;
+
+create index if not exists idx_posicoes_codigo_barras on posicoes (codigo_barras);
+
+alter table posicoes
+  drop constraint if exists posicoes_andar_check;
+alter table posicoes
+  add constraint posicoes_andar_check check (andar between 1 and 6);
+
+-- ------------------------------------------------------------
+-- Marca e ano do produto
+-- ------------------------------------------------------------
+alter table posicoes
+  add column if not exists marca text,
+  add column if not exists ano text;
+
+-- ------------------------------------------------------------
+-- Logo do app (editável, igual ao painel operacional)
+-- ------------------------------------------------------------
+create table if not exists configuracoes (
+  id integer primary key default 1,
+  logo_base64 text,
+  atualizado_em timestamptz not null default now(),
+  constraint configuracoes_linha_unica check (id = 1)
+);
+
+insert into configuracoes (id) values (1) on conflict (id) do nothing;
+
+alter table configuracoes enable row level security;
+create policy "config_select" on configuracoes for select to anon, authenticated using (true);
+create policy "config_update" on configuracoes for update to authenticated using (true) with check (true);
+grant all on configuracoes to anon, authenticated, service_role;
+
+-- ------------------------------------------------------------
+-- QR sem login: permite ajustar a quantidade direto pela
+-- posição sem precisar estar autenticado. Fica restrito a
+-- ajustar quantidade (update) e registrar o movimento (insert)
+-- — continua sem permitir excluir posições ou ver outras telas
+-- sem login, já que Mapa/Gerenciar/Buscar continuam exigindo
+-- login pelo proxy.ts.
+-- ------------------------------------------------------------
+create policy "posicoes_select_anon" on posicoes for select to anon using (true);
+create policy "posicoes_update_anon" on posicoes for update to anon using (true) with check (true);
+create policy "mov_insert_anon" on movimentacoes for insert to anon with check (true);
+grant select, update on posicoes to anon;
+grant select, insert on movimentacoes to anon;

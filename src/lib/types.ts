@@ -11,6 +11,9 @@ export interface Posicao {
   andar: number;
   produto: string | null;
   tamanho: string | null;
+  marca: string | null;
+  ano: string | null;
+  codigo_barras: string | null;
   quantidade_atual: number;
   capacidade: number;
   observacoes: string | null;
@@ -92,4 +95,10 @@ export function corOcupacao(nivel: NivelOcupacao): string {
 export function descricaoProduto(p: Posicao): string {
   if (!p.produto) return "Posição vazia (sem produto atribuído)";
   return p.tamanho ? `${p.produto} — ${p.tamanho}` : p.produto;
+}
+
+/** Descrição completa, incluindo marca e ano — usada na etiqueta impressa e na tela de posição. */
+export function descricaoCompleta(p: Posicao): string {
+  const partes = [p.produto, p.tamanho, p.marca, p.ano].filter(Boolean);
+  return partes.length > 0 ? partes.join(" — ") : "Posição vazia (sem produto atribuído)";
 }

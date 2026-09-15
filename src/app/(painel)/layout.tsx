@@ -17,7 +17,6 @@ export default async function PainelLayout({
   }
 
   const { data: perfil } = await supabase
-    
     .from("perfis")
     .select("nome")
     .eq("id", user.id)
