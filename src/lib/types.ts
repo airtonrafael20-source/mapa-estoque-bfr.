@@ -14,6 +14,7 @@ export interface Posicao {
   marca: string | null;
   ano: string | null;
   codigo_barras: string | null;
+  imagem_base64: string | null;
   quantidade_atual: number;
   capacidade: number;
   observacoes: string | null;

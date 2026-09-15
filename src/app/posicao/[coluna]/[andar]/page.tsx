@@ -175,6 +175,16 @@ export default function PosicaoPage({
       <p className="mb-1 font-display text-sm font-semibold uppercase tracking-widest text-accent">
         {posicao.codigo_coluna} · Andar {posicao.andar}
       </p>
+
+      {posicao.imagem_base64 && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={posicao.imagem_base64}
+          alt={posicao.produto ?? "Produto"}
+          className="mb-3 h-40 w-40 rounded-xl border border-border object-cover"
+        />
+      )}
+
       <h1 className="mb-1 max-w-sm break-words font-display text-2xl font-bold text-ink">
         {descricaoCompleta(posicao)}
       </h1>
@@ -182,8 +192,8 @@ export default function PosicaoPage({
         <p className="mb-1 font-mono text-xs text-ink-dim">Cód. barras: {posicao.codigo_barras}</p>
       )}
 
-      <div className="my-6">
-        <span className="text-7xl" aria-hidden>
+      <div className="my-4">
+        <span className="text-6xl" aria-hidden>
           {carinhaOcupacao(nivel)}
         </span>
       </div>

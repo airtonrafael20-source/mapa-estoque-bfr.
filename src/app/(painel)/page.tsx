@@ -39,8 +39,14 @@ function CestoNivel({ p }: { p: Posicao }) {
         <span className="min-w-0 flex-1 truncate text-ink-dim">
           <span className="font-semibold text-ink">A{p.andar}</span> · {descricaoProduto(p)}
         </span>
-        <span className={`shrink-0 whitespace-nowrap font-semibold ${cor.texto}`}>
-          {p.quantidade_atual}/{p.capacidade} {carinhaOcupacao(nivel)}
+        <span className="flex shrink-0 items-center gap-1.5">
+          {p.imagem_base64 && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={p.imagem_base64} alt="" className="h-5 w-5 rounded object-cover" />
+          )}
+          <span className={`whitespace-nowrap font-semibold ${cor.texto}`}>
+            {p.quantidade_atual}/{p.capacidade} {carinhaOcupacao(nivel)}
+          </span>
         </span>
       </div>
       <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-black/40">

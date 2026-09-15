@@ -157,3 +157,9 @@ create policy "posicoes_update_anon" on posicoes for update to anon using (true)
 create policy "mov_insert_anon" on movimentacoes for insert to anon with check (true);
 grant select, update on posicoes to anon;
 grant select, insert on movimentacoes to anon;
+
+-- ------------------------------------------------------------
+-- Imagem do produto por posição
+-- ------------------------------------------------------------
+alter table posicoes
+  add column if not exists imagem_base64 text;
