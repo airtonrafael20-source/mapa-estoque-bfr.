@@ -19,6 +19,8 @@ export default function BiparPage() {
   const [estado, setEstado] = useState<Estado>("lendo");
   const [codigoLido, setCodigoLido] = useState("");
   const [opcoes, setOpcoes] = useState<Posicao[]>([]);
+  const [entradaLeitor, setEntradaLeitor] = useState("");
+  const inputLeitorRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -71,6 +73,20 @@ export default function BiparPage() {
     } catch {
       /* já parado */
     }
+  }
+
+  useEffect(() => {
+    inputLeitorRef.current?.focus();
+  }, [estado]);
+
+  async function aoSubmeterLeitor(e: React.FormEvent) {
+    e.preventDefault();
+    const valor = entradaLeitor.trim();
+    setEntradaLeitor("");
+    if (!valor || processandoRef.current) return;
+    processandoRef.current = true;
+    await tratarLeitura(valor);
+    processandoRef.current = false;
   }
 
   async function tratarLeitura(texto: string) {
@@ -141,7 +157,7 @@ export default function BiparPage() {
     <div>
       <PageHeader
         titulo="Bipar"
-        subtitulo="Aponte pro QR do cesto ou pro código de barras do produto."
+        subtitulo="Aponte pro QR do cesto/produto com a câmera, ou bipe com um leitor físico USB/Bluetooth."
       />
 
       <Card>
@@ -151,6 +167,20 @@ export default function BiparPage() {
           className="mx-auto w-full max-w-sm overflow-hidden rounded-xl bg-black"
           style={{ minHeight: estado === "lendo" ? 260 : 0 }}
         />
+
+        <form onSubmit={aoSubmeterLeitor} className="mx-auto mt-4 w-full max-w-sm">
+          <label className="mb-1.5 block text-center text-xs text-ink-dim">
+            Ou bipe com leitor de código de barras USB/Bluetooth
+          </label>
+          <input
+            ref={inputLeitorRef}
+            value={entradaLeitor}
+            onChange={(e) => setEntradaLeitor(e.target.value)}
+            placeholder="Clique aqui e bipe…"
+            autoComplete="off"
+            className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-center text-ink outline-none focus:border-accent"
+          />
+        </form>
 
         {estado === "buscando" && (
           <p className="mt-4 text-center text-ink-dim">Procurando &quot;{codigoLido}&quot;…</p>

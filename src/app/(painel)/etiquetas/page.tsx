@@ -13,6 +13,14 @@ function EtiquetaImpressa({ p, qr }: { p: Posicao; qr: string | undefined }) {
   useEffect(() => {
     if (!barrasRef.current) return;
     if (!p.codigo_barras) return;
+
+    // Limpa qualquer desenho anterior antes de gerar de novo — evita que o
+    // código de barras seja desenhado em cima dele mesmo (o que faria as
+    // barras se sobreporem e parecerem uma mancha escura em vez de linhas).
+    while (barrasRef.current.firstChild) {
+      barrasRef.current.removeChild(barrasRef.current.firstChild);
+    }
+
     try {
       JsBarcode(barrasRef.current, p.codigo_barras, {
         format: "CODE128",
