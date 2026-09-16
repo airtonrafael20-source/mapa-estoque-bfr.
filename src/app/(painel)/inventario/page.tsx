@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Local, Posicao, compararColunas, descricaoProduto } from "@/lib/types";
 import { Card, PageHeader } from "@/components/ui";
@@ -15,9 +15,12 @@ export default function InventarioPage() {
   const [enderecoEscolhido, setEnderecoEscolhido] = useState("");
   const [inventariando, setInventariando] = useState(false);
   const [passoAtual, setPassoAtual] = useState(0); // índice dentro dos andares do endereço
-  const [contagem, setContagem] = useState("");
+  const [contagem, setContagem] = useState(0);
   const [concluidos, setConcluidos] = useState<{ andar: number; antes: number; depois: number }[]>([]);
   const [salvando, setSalvando] = useState(false);
+  const [entradaBip, setEntradaBip] = useState("");
+  const [avisoBip, setAvisoBip] = useState<string | null>(null);
+  const [ajusteManual, setAjusteManual] = useState(false);
 
   useEffect(() => {
     let ativo = true;
@@ -62,12 +65,38 @@ export default function InventarioPage() {
   }, [posicoes, localAtivoId, enderecoEscolhido]);
 
   const posicaoAtual = andaresDoEndereco[passoAtual];
+  const terminouEndereco = inventariando && passoAtual >= andaresDoEndereco.length;
+  const inputBipRef = useRef<HTMLInputElement>(null);
+
+  // O campo de bipagem fica sempre focado — é ele que recebe tudo que o
+  // leitor "digitar", pra nunca cair sem querer num campo de número.
+  useEffect(() => {
+    if (!ajusteManual) inputBipRef.current?.focus();
+  }, [ajusteManual, passoAtual, terminouEndereco]);
+
+  function aoBiparUnidade(e: React.FormEvent) {
+    e.preventDefault();
+    const codigo = entradaBip.trim();
+    setEntradaBip("");
+    if (!codigo || !posicaoAtual) return;
+
+    if (posicaoAtual.codigo_barras && codigo !== posicaoAtual.codigo_barras) {
+      setAvisoBip(`Esse código não é dessa posição (esperado: ${posicaoAtual.codigo_barras}).`);
+      setTimeout(() => setAvisoBip(null), 2500);
+      return;
+    }
+
+    setAvisoBip(null);
+    setContagem((atual) => atual + 1);
+  }
 
   function iniciarInventario() {
     if (!enderecoEscolhido) return;
     setPassoAtual(0);
-    setContagem("");
+    setContagem(0);
     setConcluidos([]);
+    setAjusteManual(false);
+    setEntradaBip("");
     setInventariando(true);
   }
 
@@ -87,8 +116,8 @@ export default function InventarioPage() {
   }
 
   async function confirmarAndar() {
-    if (!posicaoAtual || contagem === "") return;
-    const valor = Math.max(0, Number(contagem) || 0);
+    if (!posicaoAtual) return;
+    const valor = Math.max(0, contagem);
     setSalvando(true);
 
     if (valor !== posicaoAtual.quantidade_atual) {
@@ -109,16 +138,11 @@ export default function InventarioPage() {
 
     setConcluidos((prev) => [...prev, { andar: posicaoAtual.andar, antes: posicaoAtual.quantidade_atual, depois: valor }]);
     setSalvando(false);
-    setContagem("");
-
-    if (passoAtual + 1 < andaresDoEndereco.length) {
-      setPassoAtual((p) => p + 1);
-    } else {
-      setPassoAtual((p) => p + 1); // passa do fim → mostra resumo
-    }
+    setContagem(0);
+    setAjusteManual(false);
+    setEntradaBip("");
+    setPassoAtual((p) => p + 1);
   }
-
-  const terminouEndereco = inventariando && passoAtual >= andaresDoEndereco.length;
 
   const classeInput =
     "w-full min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-ink outline-none focus:border-accent";
@@ -127,7 +151,7 @@ export default function InventarioPage() {
     <div>
       <PageHeader
         titulo="Inventário"
-        subtitulo="Escolha um endereço, inicie, e vá contando andar por andar — cada confirmação já atualiza o sistema na hora."
+        subtitulo="Escolha um endereço, inicie, e bipe cada peça daquele cesto — o total soma sozinho e já vai pro sistema."
       />
 
       {!inventariando ? (
@@ -175,41 +199,90 @@ export default function InventarioPage() {
           {!terminouEndereco && posicaoAtual ? (
             <div className="text-center">
               <p className="mb-1 text-sm text-ink-dim">
-                Andar {passoAtual + 1} de {andaresDoEndereco.length}
+                Cesto {passoAtual + 1} de {andaresDoEndereco.length} (andar {posicaoAtual.andar})
               </p>
               {posicaoAtual.imagem_base64 && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={posicaoAtual.imagem_base64}
                   alt=""
-                  className="mx-auto mb-3 h-28 w-28 rounded-xl border border-border object-cover"
+                  className="mx-auto mb-3 h-24 w-24 rounded-xl border border-border object-cover"
                 />
               )}
-              <p className="mb-1 font-display text-xl font-bold text-ink">{descricaoProduto(posicaoAtual)}</p>
-              <p className="mb-6 text-sm text-ink-dim">Sistema tem {posicaoAtual.quantidade_atual} registrado</p>
+              <p className="mb-1 font-display text-lg font-bold text-ink">{descricaoProduto(posicaoAtual)}</p>
+              <p className="mb-5 text-xs text-ink-dim">
+                Sistema tinha {posicaoAtual.quantidade_atual} · capacidade {posicaoAtual.capacidade}
+              </p>
 
-              <div className="mx-auto flex max-w-xs items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  autoFocus
-                  value={contagem}
-                  onChange={(e) => setContagem(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && confirmarAndar()}
-                  placeholder="Quantidade contada"
-                  className={`${classeInput} text-center text-lg`}
-                />
+              {/* Contador grande — sobe sozinho a cada bipada */}
+              <div className="mx-auto mb-2 flex max-w-xs items-center justify-center gap-4">
                 <button
-                  onClick={confirmarAndar}
-                  disabled={salvando || contagem === ""}
-                  className="shrink-0 rounded-lg bg-ok px-4 py-2.5 font-semibold text-white disabled:opacity-50"
+                  onClick={() => setContagem((c) => Math.max(0, c - 1))}
+                  className="h-11 w-11 shrink-0 rounded-lg border border-border text-xl text-ink-dim"
                 >
-                  {salvando ? "…" : "✔"}
+                  −
+                </button>
+                <span className="font-display text-5xl font-bold text-accent">{contagem}</span>
+                <button
+                  onClick={() => setContagem((c) => c + 1)}
+                  className="h-11 w-11 shrink-0 rounded-lg border border-border text-xl text-ink-dim"
+                >
+                  +
                 </button>
               </div>
+              <p className="mb-4 text-xs text-ink-dim">
+                bipadas {posicaoAtual.capacidade > 0 && `de ${posicaoAtual.capacidade} de capacidade`}
+              </p>
+
+              {!ajusteManual ? (
+                <form onSubmit={aoBiparUnidade} className="mx-auto mb-4 max-w-xs">
+                  <input
+                    ref={inputBipRef}
+                    value={entradaBip}
+                    onChange={(e) => setEntradaBip(e.target.value)}
+                    placeholder="Bipe cada camisa aqui…"
+                    autoComplete="off"
+                    className={`${classeInput} text-center`}
+                  />
+                  {avisoBip && <p className="mt-2 text-xs text-alert">{avisoBip}</p>}
+                  <button
+                    type="button"
+                    onClick={() => setAjusteManual(true)}
+                    className="mt-3 text-xs text-ink-dim underline underline-offset-2"
+                  >
+                    Já sei o número, digitar direto
+                  </button>
+                </form>
+              ) : (
+                <div className="mx-auto mb-4 max-w-xs">
+                  <input
+                    type="number"
+                    min={0}
+                    autoFocus
+                    value={contagem}
+                    onChange={(e) => setContagem(Math.max(0, Number(e.target.value) || 0))}
+                    className={`${classeInput} text-center text-lg`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAjusteManual(false)}
+                    className="mt-3 text-xs text-ink-dim underline underline-offset-2"
+                  >
+                    Voltar a bipar
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={confirmarAndar}
+                disabled={salvando}
+                className="mx-auto block w-full max-w-xs rounded-lg bg-ok px-4 py-3 font-semibold text-white disabled:opacity-50"
+              >
+                {salvando ? "Salvando…" : `✔ Confirmar ${contagem} e próximo cesto`}
+              </button>
 
               {concluidos.length > 0 && (
-                <p className="mt-6 text-xs text-ink-dim">{concluidos.length} andar(es) já confirmado(s) nesse endereço.</p>
+                <p className="mt-6 text-xs text-ink-dim">{concluidos.length} cesto(s) já confirmado(s) nesse endereço.</p>
               )}
             </div>
           ) : (
