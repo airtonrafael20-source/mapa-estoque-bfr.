@@ -16,11 +16,13 @@ function EtiquetaImpressa({ p, qr }: { p: Posicao; qr: string | undefined }) {
     try {
       JsBarcode(barrasRef.current, p.codigo_barras, {
         format: "CODE128",
-        width: 1.4,
-        height: 34,
+        width: 2.2,
+        height: 55,
         displayValue: true,
-        fontSize: 11,
-        margin: 0,
+        fontSize: 13,
+        margin: 8,
+        background: "#ffffff",
+        lineColor: "#000000",
       });
     } catch {
       /* código inválido pro formato — ignora silenciosamente */
@@ -28,7 +30,7 @@ function EtiquetaImpressa({ p, qr }: { p: Posicao; qr: string | undefined }) {
   }, [p.codigo_barras]);
 
   return (
-    <div className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-surface p-3 text-center print:break-inside-avoid print:border-black print:bg-white">
+    <div className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-surface p-3 text-center print:break-inside-avoid print:border-black print:bg-white print:p-4">
       <p className="font-display text-lg font-bold text-ink print:text-black">
         {p.codigo_coluna} · A{p.andar}
       </p>
@@ -118,7 +120,7 @@ export default function EtiquetasPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-3 print:gap-2">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-2 print:gap-3">
         {posicoes.map((p) => (
           <EtiquetaImpressa key={p.id} p={p} qr={qrs[p.id]} />
         ))}
