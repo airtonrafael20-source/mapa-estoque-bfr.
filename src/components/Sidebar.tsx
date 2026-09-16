@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import LogoUploader from "@/components/LogoUploader";
 import {
   IconBarcode,
+  IconClipboardCheck,
   IconLayoutGrid,
   IconLogout,
   IconMenu2,
@@ -19,6 +20,7 @@ const ITENS = [
   { href: "/", rotulo: "Mapa", icone: IconLayoutGrid },
   { href: "/bipar", rotulo: "Bipar", icone: IconBarcode },
   { href: "/buscar", rotulo: "Buscar produto", icone: IconSearch },
+  { href: "/inventario", rotulo: "Inventário", icone: IconClipboardCheck },
   { href: "/gerenciar", rotulo: "Gerenciar posições", icone: IconSettings },
   { href: "/etiquetas", rotulo: "Etiquetas / QR", icone: IconPrinter },
 ];

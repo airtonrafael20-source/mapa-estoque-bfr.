@@ -21,6 +21,22 @@ export default function BiparPage() {
   const [opcoes, setOpcoes] = useState<Posicao[]>([]);
   const [entradaLeitor, setEntradaLeitor] = useState("");
   const inputLeitorRef = useRef<HTMLInputElement>(null);
+  const cameraAtivaRef = useRef(false);
+
+  async function pararCameraComSeguranca() {
+    if (!cameraAtivaRef.current || !scannerRef.current) return;
+    cameraAtivaRef.current = false;
+    try {
+      await scannerRef.current.stop();
+    } catch {
+      /* já parada ou nunca chegou a rodar */
+    }
+    try {
+      scannerRef.current.clear();
+    } catch {
+      /* nada pra limpar */
+    }
+  }
 
   useEffect(() => {
     let ativo = true;
@@ -49,6 +65,12 @@ export default function BiparPage() {
             /* frame sem leitura — ignora */
           }
         );
+        if (ativo) {
+          cameraAtivaRef.current = true;
+        } else {
+          // o componente já foi desmontado antes da câmera terminar de ligar — desliga na hora
+          pararCameraComSeguranca();
+        }
       } catch {
         if (ativo) setEstado("erro_camera");
       }
@@ -58,21 +80,13 @@ export default function BiparPage() {
 
     return () => {
       ativo = false;
-      scannerRef.current
-        ?.stop()
-        .then(() => scannerRef.current?.clear())
-        .catch(() => {});
+      pararCameraComSeguranca();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function pararCamera() {
-    try {
-      await scannerRef.current?.stop();
-      await scannerRef.current?.clear();
-    } catch {
-      /* já parado */
-    }
+    await pararCameraComSeguranca();
   }
 
   useEffect(() => {
@@ -148,6 +162,7 @@ export default function BiparPage() {
         },
         () => {}
       );
+      cameraAtivaRef.current = true;
     } catch {
       setEstado("erro_camera");
     }
