@@ -67,6 +67,7 @@ export default function GerenciarPage() {
     tamanho: string;
     codigoBarras: string;
     quantidade: string;
+    imagem: string;
   }
   const TAMANHOS_PADRAO = ["P", "M", "G", "GG", "2GG", "4GG", "6GG"];
   const [loteRua, setLoteRua] = useState("");
@@ -75,10 +76,8 @@ export default function GerenciarPage() {
   const [loteAno, setLoteAno] = useState("");
   const [loteCapacidade, setLoteCapacidade] = useState("40");
   const [loteLinhas, setLoteLinhas] = useState<LinhaLote[]>(
-    TAMANHOS_PADRAO.map((tamanho) => ({ tamanho, codigoBarras: "", quantidade: "" }))
+    TAMANHOS_PADRAO.map((tamanho) => ({ tamanho, codigoBarras: "", quantidade: "", imagem: "" }))
   );
-  const [loteImagem, setLoteImagem] = useState("");
-  const inputImagemLoteRef = useRef<HTMLInputElement>(null);
   const [loteSalvando, setLoteSalvando] = useState(false);
   const [loteErro, setLoteErro] = useState<string | null>(null);
   const [loteAviso, setLoteAviso] = useState<string | null>(null);
@@ -166,18 +165,18 @@ export default function GerenciarPage() {
   }
 
   function adicionarLinhaLote() {
-    setLoteLinhas((prev) => [...prev, { tamanho: "", codigoBarras: "", quantidade: "" }]);
+    setLoteLinhas((prev) => [...prev, { tamanho: "", codigoBarras: "", quantidade: "", imagem: "" }]);
   }
 
   function removerLinhaLote(indice: number) {
     setLoteLinhas((prev) => prev.filter((_, i) => i !== indice));
   }
 
-  async function aoEscolherImagemLote(e: React.ChangeEvent<HTMLInputElement>) {
+  async function aoEscolherImagemLinha(indice: number, e: React.ChangeEvent<HTMLInputElement>) {
     const arquivo = e.target.files?.[0];
     if (!arquivo) return;
     const base64 = await comprimirImagem(arquivo);
-    setLoteImagem(base64);
+    atualizarLinhaLote(indice, "imagem", base64);
   }
 
   async function criarRuaCompleta(e: React.FormEvent) {
@@ -204,25 +203,21 @@ export default function GerenciarPage() {
 
     const linhas = linhasValidas.flatMap((linha, indice) => {
       const codigo_coluna = `${rua}-${proximoNumero + indice}`;
-      let restante = Math.max(0, Number(linha.quantidade) || 0);
+      const quantidade = Math.max(0, Number(linha.quantidade) || 0);
 
-      return Array.from({ length: ANDARES_POR_COLUNA }, (_, i) => {
-        const nesseAndar = Math.min(restante, capacidadePorAndar);
-        restante -= nesseAndar;
-        return {
-          local_id: localAtivoId,
-          codigo_coluna,
-          andar: i + 1,
-          produto: loteProduto.trim() || null,
-          tamanho: linha.tamanho.trim(),
-          marca: loteMarca.trim() || null,
-          ano: loteAno.trim() || null,
-          codigo_barras: linha.codigoBarras.trim() || null,
-          imagem_base64: loteImagem || null,
-          capacidade: capacidadePorAndar,
-          quantidade_atual: nesseAndar,
-        };
-      });
+      return Array.from({ length: ANDARES_POR_COLUNA }, (_, i) => ({
+        local_id: localAtivoId,
+        codigo_coluna,
+        andar: i + 1,
+        produto: loteProduto.trim() || null,
+        tamanho: linha.tamanho.trim(),
+        marca: loteMarca.trim() || null,
+        ano: loteAno.trim() || null,
+        codigo_barras: linha.codigoBarras.trim() || null,
+        imagem_base64: linha.imagem || null,
+        capacidade: capacidadePorAndar,
+        quantidade_atual: quantidade,
+      }));
     });
 
     const { error } = await supabase
@@ -254,9 +249,7 @@ export default function GerenciarPage() {
       }), com código de barras e quantidade já preenchidos.`
     );
     setLoteProduto("");
-    setLoteImagem("");
-    if (inputImagemLoteRef.current) inputImagemLoteRef.current.value = "";
-    setLoteLinhas(TAMANHOS_PADRAO.map((tamanho) => ({ tamanho, codigoBarras: "", quantidade: "" })));
+    setLoteLinhas(TAMANHOS_PADRAO.map((tamanho) => ({ tamanho, codigoBarras: "", quantidade: "", imagem: "" })));
     setTimeout(() => setLoteAviso(null), 6000);
   }
 
@@ -530,9 +523,8 @@ export default function GerenciarPage() {
           CRIAR RUA COMPLETA (VÁRIAS COLUNAS DE UMA VEZ)
         </h2>
         <p className="mb-4 text-sm text-ink-dim">
-          Uma linha vira uma coluna — preenche tamanho, código de barras e quantidade final de cada um, e ele
-          já cria tudo com os {ANDARES_POR_COLUNA} andares preenchidos (distribuindo a quantidade pelos
-          andares conforme a capacidade).
+          Uma linha vira uma coluna — preenche tamanho, código de barras, quantidade e foto de cada um, e ele
+          já cria tudo com os {ANDARES_POR_COLUNA} andares preenchidos com essa mesma quantidade cada.
         </p>
         <form onSubmit={criarRuaCompleta} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <label className="col-span-1 block min-w-0">
@@ -555,21 +547,13 @@ export default function GerenciarPage() {
             <span className="mb-1.5 block text-sm text-ink-dim">Capacidade</span>
             <input type="number" min={1} value={loteCapacidade} onChange={(e) => setLoteCapacidade(e.target.value)} className={classeInput} />
           </label>
-          <label className="col-span-2 block min-w-0 sm:col-span-2 lg:col-span-2">
-            <span className="mb-1.5 block text-sm text-ink-dim">Foto do produto (aplica a todos os tamanhos)</span>
-            <div className="flex items-center gap-2">
-              <input ref={inputImagemLoteRef} type="file" accept="image/*" onChange={aoEscolherImagemLote} className={`${classeInput} p-1.5`} />
-              {loteImagem && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={loteImagem} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
-              )}
-            </div>
-          </label>
           <label className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-6">
-            <span className="mb-1.5 block text-sm text-ink-dim">Tamanhos, código de barras e quantidade</span>
+            <span className="mb-1.5 block text-sm text-ink-dim">
+              Tamanhos, código de barras, quantidade e foto (cada linha pode ter material/cor diferente)
+            </span>
             <div className="flex flex-col gap-2">
               {loteLinhas.map((linha, i) => (
-                <div key={i} className="grid grid-cols-3 gap-2">
+                <div key={i} className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                   <input
                     value={linha.tamanho}
                     onChange={(e) => atualizarLinhaLote(i, "tamanho", e.target.value)}
@@ -582,24 +566,34 @@ export default function GerenciarPage() {
                     placeholder="Código de barras"
                     className={classeInput}
                   />
-                  <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    value={linha.quantidade}
+                    onChange={(e) => atualizarLinhaLote(i, "quantidade", e.target.value)}
+                    placeholder="Qtd. final"
+                    className={classeInput}
+                  />
+                  <div className="flex items-center gap-2">
                     <input
-                      type="number"
-                      min={0}
-                      value={linha.quantidade}
-                      onChange={(e) => atualizarLinhaLote(i, "quantidade", e.target.value)}
-                      placeholder="Qtd. final"
-                      className={classeInput}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => aoEscolherImagemLinha(i, e)}
+                      className={`${classeInput} p-1.5`}
                     />
-                    <button
-                      type="button"
-                      onClick={() => removerLinhaLote(i)}
-                      title="Remover esse tamanho"
-                      className="shrink-0 rounded-lg border border-border px-3 text-ink-dim hover:border-alert hover:text-alert"
-                    >
-                      🗑
-                    </button>
+                    {linha.imagem && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={linha.imagem} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />
+                    )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => removerLinhaLote(i)}
+                    title="Remover esse tamanho"
+                    className="shrink-0 rounded-lg border border-border px-3 text-ink-dim hover:border-alert hover:text-alert"
+                  >
+                    🗑 Remover
+                  </button>
                 </div>
               ))}
             </div>
