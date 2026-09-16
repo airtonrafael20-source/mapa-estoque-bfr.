@@ -408,6 +408,25 @@ export default function GerenciarPage() {
     setProcessandoSelecao(false);
   }
 
+  async function renomearSelecionados() {
+    if (selecionados.size === 0) return;
+    const primeiro = posicoes.find((p) => selecionados.has(p.id));
+    const novoNome = window.prompt(
+      `Novo nome do produto pra ${selecionados.size} posição${selecionados.size === 1 ? "" : "ões"} selecionada${
+        selecionados.size === 1 ? "" : "s"
+      }:`,
+      primeiro?.produto ?? ""
+    );
+    if (novoNome === null || !novoNome.trim()) return;
+
+    setProcessandoSelecao(true);
+    const ids = Array.from(selecionados);
+    setPosicoes((prev) => prev.map((p) => (selecionados.has(p.id) ? { ...p, produto: novoNome.trim() } : p)));
+    await supabase.from("posicoes").update({ produto: novoNome.trim() }).in("id", ids);
+    setSelecionados(new Set());
+    setProcessandoSelecao(false);
+  }
+
   async function limparSelecionados() {
     if (selecionados.size === 0) return;
     if (
@@ -718,6 +737,13 @@ export default function GerenciarPage() {
                 {selecionados.size === 1 ? "" : "s"}
               </p>
               <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={renomearSelecionados}
+                  disabled={processandoSelecao}
+                  className="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent disabled:opacity-60"
+                >
+                  Renomear produto
+                </button>
                 <button
                   onClick={limparSelecionados}
                   disabled={processandoSelecao}
