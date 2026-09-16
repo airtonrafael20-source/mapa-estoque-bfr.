@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import LogoUploader from "@/components/LogoUploader";
+import TrocarFundo from "@/components/TrocarFundo";
 import {
   IconBarcode,
   IconClipboardCheck,
@@ -71,8 +72,9 @@ export default function Sidebar({ nome }: { nome: string }) {
         })}
       </nav>
 
-      <div className="mt-4 border-t border-border pt-4">
-        <p className="mb-2 truncate px-1 text-xs text-ink-dim">{nome}</p>
+      <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+        <p className="mb-1 truncate px-1 text-xs text-ink-dim">{nome}</p>
+        <TrocarFundo />
         <button
           onClick={sair}
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-ink-dim transition hover:border-alert hover:text-alert"

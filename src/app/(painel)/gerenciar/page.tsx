@@ -414,22 +414,51 @@ export default function GerenciarPage() {
     setProcessandoSelecao(false);
   }
 
-  async function renomearSelecionados() {
+  const [editandoLote, setEditandoLote] = useState(false);
+  const [edicaoLote, setEdicaoLote] = useState({
+    produto: "",
+    tamanho: "",
+    marca: "",
+    ano: "",
+    codigoBarras: "",
+    capacidade: "",
+  });
+
+  function abrirEdicaoLote() {
+    setEdicaoLote({ produto: "", tamanho: "", marca: "", ano: "", codigoBarras: "", capacidade: "" });
+    setEditandoLote(true);
+  }
+
+  async function aplicarEdicaoLote() {
     if (selecionados.size === 0) return;
-    const primeiro = posicoes.find((p) => selecionados.has(p.id));
-    const novoNome = window.prompt(
-      `Novo nome do produto pra ${selecionados.size} posição${selecionados.size === 1 ? "" : "ões"} selecionada${
-        selecionados.size === 1 ? "" : "s"
-      }:`,
-      primeiro?.produto ?? ""
-    );
-    if (novoNome === null || !novoNome.trim()) return;
+    const atualizacao: Record<string, string> = {};
+    if (edicaoLote.produto.trim()) atualizacao.produto = edicaoLote.produto.trim();
+    if (edicaoLote.tamanho.trim()) atualizacao.tamanho = edicaoLote.tamanho.trim();
+    if (edicaoLote.marca.trim()) atualizacao.marca = edicaoLote.marca.trim();
+    if (edicaoLote.ano.trim()) atualizacao.ano = edicaoLote.ano.trim();
+    if (edicaoLote.codigoBarras.trim()) atualizacao.codigo_barras = edicaoLote.codigoBarras.trim();
+    if (edicaoLote.capacidade.trim()) atualizacao.capacidade = edicaoLote.capacidade.trim();
+
+    if (Object.keys(atualizacao).length === 0) {
+      setEditandoLote(false);
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Aplicar essas mudanças em ${selecionados.size} posição${selecionados.size === 1 ? "" : "ões"} selecionada${
+          selecionados.size === 1 ? "" : "s"
+        }?`
+      )
+    )
+      return;
 
     setProcessandoSelecao(true);
     const ids = Array.from(selecionados);
-    setPosicoes((prev) => prev.map((p) => (selecionados.has(p.id) ? { ...p, produto: novoNome.trim() } : p)));
-    await supabase.from("posicoes").update({ produto: novoNome.trim() }).in("id", ids);
+    setPosicoes((prev) => prev.map((p) => (selecionados.has(p.id) ? { ...p, ...atualizacao } : p)));
+    await supabase.from("posicoes").update(atualizacao).in("id", ids);
     setSelecionados(new Set());
+    setEditandoLote(false);
     setProcessandoSelecao(false);
   }
 
@@ -737,40 +766,97 @@ export default function GerenciarPage() {
       ) : (
         <div className="flex flex-col gap-5">
           {selecionados.size > 0 && (
-            <Card className="sticky top-2 z-10 flex flex-wrap items-center justify-between gap-3 border-accent/40 bg-surface py-3">
-              <p className="text-sm text-ink">
-                <span className="font-semibold text-accent">{selecionados.size}</span> selecionada
-                {selecionados.size === 1 ? "" : "s"}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={renomearSelecionados}
-                  disabled={processandoSelecao}
-                  className="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent disabled:opacity-60"
-                >
-                  Renomear produto
-                </button>
-                <button
-                  onClick={limparSelecionados}
-                  disabled={processandoSelecao}
-                  className="rounded-lg border border-pend px-3 py-1.5 text-sm font-semibold text-pend disabled:opacity-60"
-                >
-                  Limpar selecionadas
-                </button>
-                <button
-                  onClick={excluirSelecionados}
-                  disabled={processandoSelecao}
-                  className="rounded-lg border border-alert px-3 py-1.5 text-sm font-semibold text-alert disabled:opacity-60"
-                >
-                  Excluir selecionadas
-                </button>
-                <button
-                  onClick={() => setSelecionados(new Set())}
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm text-ink-dim"
-                >
-                  Limpar seleção
-                </button>
+            <Card className="sticky top-2 z-10 border-accent/40 bg-surface py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-ink">
+                  <span className="font-semibold text-accent">{selecionados.size}</span> selecionada
+                  {selecionados.size === 1 ? "" : "s"}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={editandoLote ? () => setEditandoLote(false) : abrirEdicaoLote}
+                    disabled={processandoSelecao}
+                    className="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent disabled:opacity-60"
+                  >
+                    {editandoLote ? "Fechar edição" : "Editar selecionadas"}
+                  </button>
+                  <button
+                    onClick={limparSelecionados}
+                    disabled={processandoSelecao}
+                    className="rounded-lg border border-pend px-3 py-1.5 text-sm font-semibold text-pend disabled:opacity-60"
+                  >
+                    Limpar selecionadas
+                  </button>
+                  <button
+                    onClick={excluirSelecionados}
+                    disabled={processandoSelecao}
+                    className="rounded-lg border border-alert px-3 py-1.5 text-sm font-semibold text-alert disabled:opacity-60"
+                  >
+                    Excluir selecionadas
+                  </button>
+                  <button
+                    onClick={() => setSelecionados(new Set())}
+                    className="rounded-lg border border-border px-3 py-1.5 text-sm text-ink-dim"
+                  >
+                    Limpar seleção
+                  </button>
+                </div>
               </div>
+
+              {editandoLote && (
+                <div className="mt-4 border-t border-border pt-4">
+                  <p className="mb-3 text-xs text-ink-dim">
+                    Só os campos preenchidos abaixo são alterados nas {selecionados.size} selecionadas — deixe
+                    em branco o que não quer mudar.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                    <input
+                      value={edicaoLote.produto}
+                      onChange={(e) => setEdicaoLote((f) => ({ ...f, produto: e.target.value }))}
+                      placeholder="Produto"
+                      className="col-span-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                    />
+                    <input
+                      value={edicaoLote.tamanho}
+                      onChange={(e) => setEdicaoLote((f) => ({ ...f, tamanho: e.target.value }))}
+                      placeholder="Tamanho"
+                      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                    />
+                    <input
+                      value={edicaoLote.marca}
+                      onChange={(e) => setEdicaoLote((f) => ({ ...f, marca: e.target.value }))}
+                      placeholder="Marca"
+                      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                    />
+                    <input
+                      value={edicaoLote.ano}
+                      onChange={(e) => setEdicaoLote((f) => ({ ...f, ano: e.target.value }))}
+                      placeholder="Ano"
+                      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                    />
+                    <input
+                      value={edicaoLote.codigoBarras}
+                      onChange={(e) => setEdicaoLote((f) => ({ ...f, codigoBarras: e.target.value }))}
+                      placeholder="Código de barras"
+                      className="col-span-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                    />
+                    <input
+                      type="number"
+                      value={edicaoLote.capacidade}
+                      onChange={(e) => setEdicaoLote((f) => ({ ...f, capacidade: e.target.value }))}
+                      placeholder="Capacidade"
+                      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                    />
+                  </div>
+                  <button
+                    onClick={aplicarEdicaoLote}
+                    disabled={processandoSelecao}
+                    className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink disabled:opacity-60"
+                  >
+                    {processandoSelecao ? "Aplicando…" : `Aplicar em ${selecionados.size} selecionada${selecionados.size === 1 ? "" : "s"}`}
+                  </button>
+                </div>
+              )}
             </Card>
           )}
 
@@ -802,7 +888,7 @@ export default function GerenciarPage() {
                       title="Mover/renomear uma coluna inteira"
                     >
                       <option value="" disabled>
-                        ↦ Mover coluna…
+                        ✎ Renomear/mover coluna…
                       </option>
                       {colunasNaRua.map((c) => (
                         <option key={c} value={c}>

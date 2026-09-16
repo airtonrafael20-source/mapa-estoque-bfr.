@@ -163,3 +163,9 @@ grant select, insert on movimentacoes to anon;
 -- ------------------------------------------------------------
 alter table posicoes
   add column if not exists imagem_base64 text;
+
+-- ------------------------------------------------------------
+-- Fundo de tela editável (imagem de fundo do painel)
+-- ------------------------------------------------------------
+alter table configuracoes
+  add column if not exists fundo_base64 text;

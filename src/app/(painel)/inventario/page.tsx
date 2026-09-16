@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Local, Posicao, compararColunas, descricaoProduto, ruaDaColuna } from "@/lib/types";
+import { Local, Posicao, compararColunas, descricaoProduto } from "@/lib/types";
 import { Card, PageHeader } from "@/components/ui";
 
 export default function InventarioPage() {
@@ -11,10 +11,13 @@ export default function InventarioPage() {
   const [localAtivoId, setLocalAtivoId] = useState("");
   const [posicoes, setPosicoes] = useState<Posicao[]>([]);
   const [carregando, setCarregando] = useState(true);
-  const [contagens, setContagens] = useState<Record<string, string>>({});
-  const [filtroRua, setFiltroRua] = useState("todas");
+
+  const [enderecoEscolhido, setEnderecoEscolhido] = useState("");
+  const [inventariando, setInventariando] = useState(false);
+  const [passoAtual, setPassoAtual] = useState(0); // índice dentro dos andares do endereço
+  const [contagem, setContagem] = useState("");
+  const [concluidos, setConcluidos] = useState<{ andar: number; antes: number; depois: number }[]>([]);
   const [salvando, setSalvando] = useState(false);
-  const [aviso, setAviso] = useState<string | null>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -33,41 +36,45 @@ export default function InventarioPage() {
       }
     }
     carregar();
+
+    const canal = supabase
+      .channel("inventario-posicoes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "posicoes" }, () => carregar())
+      .subscribe();
+
     return () => {
       ativo = false;
+      supabase.removeChannel(canal);
     };
   }, [supabase]);
 
-  const posicoesDoLocal = useMemo(
-    () => posicoes.filter((p) => p.local_id === localAtivoId),
-    [posicoes, localAtivoId]
-  );
+  const enderecosDisponiveis = useMemo(() => {
+    const codigos = Array.from(
+      new Set(posicoes.filter((p) => p.local_id === localAtivoId).map((p) => p.codigo_coluna))
+    );
+    return codigos.sort(compararColunas);
+  }, [posicoes, localAtivoId]);
 
-  const ruasDisponiveis = useMemo(
-    () => Array.from(new Set(posicoesDoLocal.map((p) => ruaDaColuna(p.codigo_coluna)))).sort(),
-    [posicoesDoLocal]
-  );
+  const andaresDoEndereco = useMemo(() => {
+    return posicoes
+      .filter((p) => p.local_id === localAtivoId && p.codigo_coluna === enderecoEscolhido)
+      .sort((a, b) => a.andar - b.andar);
+  }, [posicoes, localAtivoId, enderecoEscolhido]);
 
-  const posicoesFiltradas = useMemo(() => {
-    const lista =
-      filtroRua === "todas" ? posicoesDoLocal : posicoesDoLocal.filter((p) => ruaDaColuna(p.codigo_coluna) === filtroRua);
-    return [...lista].sort((a, b) => compararColunas(a.codigo_coluna, b.codigo_coluna) || a.andar - b.andar);
-  }, [posicoesDoLocal, filtroRua]);
+  const posicaoAtual = andaresDoEndereco[passoAtual];
 
-  const alteracoes = useMemo(() => {
-    return posicoesFiltradas
-      .map((p) => {
-        const contado = contagens[p.id];
-        if (contado === undefined || contado === "") return null;
-        const valor = Math.max(0, Number(contado) || 0);
-        if (valor === p.quantidade_atual) return null;
-        return { posicao: p, novaQtd: valor, diferenca: valor - p.quantidade_atual };
-      })
-      .filter((x): x is { posicao: Posicao; novaQtd: number; diferenca: number } => x !== null);
-  }, [posicoesFiltradas, contagens]);
+  function iniciarInventario() {
+    if (!enderecoEscolhido) return;
+    setPassoAtual(0);
+    setContagem("");
+    setConcluidos([]);
+    setInventariando(true);
+  }
 
-  function atualizarContagem(id: string, valor: string) {
-    setContagens((prev) => ({ ...prev, [id]: valor }));
+  function encerrarInventario() {
+    setInventariando(false);
+    setEnderecoEscolhido("");
+    setConcluidos([]);
   }
 
   async function registrarNome(): Promise<string> {
@@ -79,167 +86,164 @@ export default function InventarioPage() {
     return perfil?.nome ?? user.email ?? "Usuário";
   }
 
-  async function salvarInventario() {
-    if (alteracoes.length === 0) return;
-    if (
-      !window.confirm(
-        `Aplicar a contagem em ${alteracoes.length} posição${alteracoes.length === 1 ? "" : "ões"}? Isso ajusta a quantidade no sistema pro valor contado.`
-      )
-    )
-      return;
-
+  async function confirmarAndar() {
+    if (!posicaoAtual || contagem === "") return;
+    const valor = Math.max(0, Number(contagem) || 0);
     setSalvando(true);
-    const nome = await registrarNome();
 
-    for (const alt of alteracoes) {
+    if (valor !== posicaoAtual.quantidade_atual) {
+      const nome = await registrarNome();
       await supabase
         .from("posicoes")
-        .update({ quantidade_atual: alt.novaQtd, atualizado_em: new Date().toISOString() })
-        .eq("id", alt.posicao.id);
-
+        .update({ quantidade_atual: valor, atualizado_em: new Date().toISOString() })
+        .eq("id", posicaoAtual.id);
       await supabase.from("movimentacoes").insert({
-        posicao_id: alt.posicao.id,
+        posicao_id: posicaoAtual.id,
         tipo: "ajuste",
-        quantidade: Math.abs(alt.diferenca),
-        quantidade_resultante: alt.novaQtd,
+        quantidade: Math.abs(valor - posicaoAtual.quantidade_atual),
+        quantidade_resultante: valor,
         responsavel_nome: `${nome} (inventário)`,
       });
+      setPosicoes((prev) => prev.map((p) => (p.id === posicaoAtual.id ? { ...p, quantidade_atual: valor } : p)));
     }
 
-    setPosicoes((prev) =>
-      prev.map((p) => {
-        const alt = alteracoes.find((a) => a.posicao.id === p.id);
-        return alt ? { ...p, quantidade_atual: alt.novaQtd } : p;
-      })
-    );
-    setContagens({});
+    setConcluidos((prev) => [...prev, { andar: posicaoAtual.andar, antes: posicaoAtual.quantidade_atual, depois: valor }]);
     setSalvando(false);
-    setAviso(`Inventário aplicado: ${alteracoes.length} posição${alteracoes.length === 1 ? "" : "ões"} atualizada${alteracoes.length === 1 ? "" : "s"}.`);
-    setTimeout(() => setAviso(null), 5000);
+    setContagem("");
+
+    if (passoAtual + 1 < andaresDoEndereco.length) {
+      setPassoAtual((p) => p + 1);
+    } else {
+      setPassoAtual((p) => p + 1); // passa do fim → mostra resumo
+    }
   }
 
+  const terminouEndereco = inventariando && passoAtual >= andaresDoEndereco.length;
+
   const classeInput =
-    "w-24 rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-center text-ink outline-none focus:border-accent";
+    "w-full min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-ink outline-none focus:border-accent";
 
   return (
     <div>
       <PageHeader
         titulo="Inventário"
-        subtitulo="Digite a quantidade que você contou fisicamente em cada posição. Só o que você preencher é alterado."
-        acao={
-          <button
-            onClick={salvarInventario}
-            disabled={salvando || alteracoes.length === 0}
-            className="rounded-lg bg-accent px-4 py-2.5 font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-50"
-          >
-            {salvando ? "Salvando…" : `Aplicar contagem (${alteracoes.length})`}
-          </button>
-        }
+        subtitulo="Escolha um endereço, inicie, e vá contando andar por andar — cada confirmação já atualiza o sistema na hora."
       />
 
-      <Card className="mb-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="block min-w-0 flex-1">
-            <span className="mb-1.5 block text-sm text-ink-dim">Local / galpão</span>
-            <select
-              value={localAtivoId}
-              onChange={(e) => setLocalAtivoId(e.target.value)}
-              className="w-full min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-ink outline-none focus:border-accent"
+      {!inventariando ? (
+        <Card className="mb-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block min-w-0 flex-1">
+              <span className="mb-1.5 block text-sm text-ink-dim">Local / galpão</span>
+              <select value={localAtivoId} onChange={(e) => setLocalAtivoId(e.target.value)} className={classeInput}>
+                {locais.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block min-w-0 flex-1">
+              <span className="mb-1.5 block text-sm text-ink-dim">Endereço (coluna)</span>
+              <select value={enderecoEscolhido} onChange={(e) => setEnderecoEscolhido(e.target.value)} className={classeInput}>
+                <option value="">Selecione…</option>
+                {enderecosDisponiveis.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              onClick={iniciarInventario}
+              disabled={!enderecoEscolhido || carregando}
+              className="shrink-0 rounded-lg bg-accent px-5 py-2.5 font-semibold text-accent-ink transition hover:brightness-110 disabled:opacity-50"
             >
-              {locais.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.nome}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block min-w-0 flex-1">
-            <span className="mb-1.5 block text-sm text-ink-dim">Rua</span>
-            <select
-              value={filtroRua}
-              onChange={(e) => setFiltroRua(e.target.value)}
-              className="w-full min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-ink outline-none focus:border-accent"
-            >
-              <option value="todas">Todas</option>
-              {ruasDisponiveis.map((r) => (
-                <option key={r} value={r}>
-                  Rua {r}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {aviso && <p className="mt-3 rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-sm text-ok">{aviso}</p>}
-      </Card>
-
-      {carregando ? (
-        <p className="text-sm text-ink-dim">Carregando…</p>
-      ) : posicoesFiltradas.length === 0 ? (
-        <Card>
-          <p className="text-ink-dim">Nenhuma posição encontrada com esse filtro.</p>
+              ▶ Iniciar inventário
+            </button>
+          </div>
         </Card>
       ) : (
-        <Card className="p-0">
-          <div className="scroll-safe max-w-full">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-ink-dim">
-                  <th className="whitespace-nowrap px-4 py-2.5 font-medium">Coluna</th>
-                  <th className="whitespace-nowrap px-4 py-2.5 font-medium">Andar</th>
-                  <th className="px-4 py-2.5 font-medium">Produto</th>
-                  <th className="whitespace-nowrap px-4 py-2.5 font-medium">Tamanho</th>
-                  <th className="whitespace-nowrap px-4 py-2.5 font-medium">Sistema</th>
-                  <th className="whitespace-nowrap px-4 py-2.5 font-medium">Contado</th>
-                  <th className="whitespace-nowrap px-4 py-2.5 font-medium">Diferença</th>
-                </tr>
-              </thead>
-              <tbody>
-                {posicoesFiltradas.map((p) => {
-                  const contado = contagens[p.id] ?? "";
-                  const valor = contado === "" ? null : Math.max(0, Number(contado) || 0);
-                  const diferenca = valor === null ? null : valor - p.quantidade_atual;
-                  return (
-                    <tr key={p.id} className="border-b border-border last:border-0 hover:bg-surface-2/60">
-                      <td className="whitespace-nowrap px-4 py-2.5 text-ink">{p.codigo_coluna}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-ink">{p.andar}</td>
-                      <td className="px-4 py-2.5 text-ink">
-                        <span className="flex items-center gap-2">
-                          {p.imagem_base64 && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={p.imagem_base64} alt="" className="h-6 w-6 shrink-0 rounded object-cover" />
-                          )}
-                          {descricaoProduto(p)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-ink">{p.tamanho ?? "—"}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-ink-dim">{p.quantidade_atual}</td>
-                      <td className="px-4 py-2.5">
-                        <input
-                          type="number"
-                          min={0}
-                          value={contado}
-                          onChange={(e) => atualizarContagem(p.id, e.target.value)}
-                          placeholder="—"
-                          className={classeInput}
-                        />
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2.5">
-                        {diferenca === null ? (
-                          <span className="text-ink-dim">—</span>
-                        ) : diferenca === 0 ? (
-                          <span className="text-ink-dim">sem diferença</span>
-                        ) : (
-                          <span className={diferenca > 0 ? "text-ok" : "text-alert"}>
-                            {diferenca > 0 ? `+${diferenca}` : diferenca}
-                          </span>
-                        )}
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <p className="font-display text-lg font-semibold text-ink">Endereço {enderecoEscolhido}</p>
+            <button onClick={encerrarInventario} className="text-sm text-ink-dim underline underline-offset-2">
+              Encerrar
+            </button>
+          </div>
+
+          {!terminouEndereco && posicaoAtual ? (
+            <div className="text-center">
+              <p className="mb-1 text-sm text-ink-dim">
+                Andar {passoAtual + 1} de {andaresDoEndereco.length}
+              </p>
+              {posicaoAtual.imagem_base64 && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={posicaoAtual.imagem_base64}
+                  alt=""
+                  className="mx-auto mb-3 h-28 w-28 rounded-xl border border-border object-cover"
+                />
+              )}
+              <p className="mb-1 font-display text-xl font-bold text-ink">{descricaoProduto(posicaoAtual)}</p>
+              <p className="mb-6 text-sm text-ink-dim">Sistema tem {posicaoAtual.quantidade_atual} registrado</p>
+
+              <div className="mx-auto flex max-w-xs items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  autoFocus
+                  value={contagem}
+                  onChange={(e) => setContagem(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && confirmarAndar()}
+                  placeholder="Quantidade contada"
+                  className={`${classeInput} text-center text-lg`}
+                />
+                <button
+                  onClick={confirmarAndar}
+                  disabled={salvando || contagem === ""}
+                  className="shrink-0 rounded-lg bg-ok px-4 py-2.5 font-semibold text-white disabled:opacity-50"
+                >
+                  {salvando ? "…" : "✔"}
+                </button>
+              </div>
+
+              {concluidos.length > 0 && (
+                <p className="mt-6 text-xs text-ink-dim">{concluidos.length} andar(es) já confirmado(s) nesse endereço.</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <p className="mb-4 text-center text-ok">✅ Inventário do endereço {enderecoEscolhido} concluído!</p>
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-ink-dim">
+                    <th className="px-2 py-2 font-medium">Andar</th>
+                    <th className="px-2 py-2 font-medium">Antes</th>
+                    <th className="px-2 py-2 font-medium">Contado</th>
+                    <th className="px-2 py-2 font-medium">Diferença</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {concluidos.map((c) => (
+                    <tr key={c.andar} className="border-b border-border last:border-0">
+                      <td className="px-2 py-2 text-ink">{c.andar}</td>
+                      <td className="px-2 py-2 text-ink-dim">{c.antes}</td>
+                      <td className="px-2 py-2 text-ink">{c.depois}</td>
+                      <td className={`px-2 py-2 ${c.depois - c.antes === 0 ? "text-ink-dim" : c.depois - c.antes > 0 ? "text-ok" : "text-alert"}`}>
+                        {c.depois - c.antes === 0 ? "—" : c.depois - c.antes > 0 ? `+${c.depois - c.antes}` : c.depois - c.antes}
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-4 flex justify-center gap-3">
+                <button onClick={encerrarInventario} className="rounded-lg bg-accent px-4 py-2 font-semibold text-accent-ink">
+                  Inventariar outro endereço
+                </button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </div>

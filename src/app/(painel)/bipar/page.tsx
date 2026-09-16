@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Posicao, descricaoProduto } from "@/lib/types";
+import { Posicao, compararColunas, descricaoProduto } from "@/lib/types";
 import { Card, PageHeader } from "@/components/ui";
 
 type Estado = "lendo" | "buscando" | "nao_encontrado" | "erro_camera";
@@ -120,7 +120,9 @@ export default function BiparPage() {
     const { data } = await supabase
       .from("posicoes")
       .select("*")
-      .eq("codigo_barras", texto.trim());
+      .eq("codigo_barras", texto.trim())
+      .order("codigo_coluna", { ascending: true })
+      .order("andar", { ascending: true });
 
     const encontradas = (data as Posicao[]) ?? [];
 
@@ -132,7 +134,10 @@ export default function BiparPage() {
 
     if (encontradas.length > 1) {
       await pararCamera();
-      setOpcoes(encontradas);
+      const ordenadas = [...encontradas].sort(
+        (a, b) => compararColunas(a.codigo_coluna, b.codigo_coluna) || a.andar - b.andar
+      );
+      setOpcoes(ordenadas);
       setEstado("nao_encontrado"); // reaproveita a tela pra listar as opções
       return;
     }
