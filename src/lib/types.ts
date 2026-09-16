@@ -38,6 +38,15 @@ export function proximaColuna(rua: string, colunasExistentes: string[]): string 
   return `${rua.toUpperCase()}-${proximo}`;
 }
 
+/** Compara códigos de coluna numericamente (A-2 antes de A-10), não por texto. */
+export function compararColunas(a: string, b: string): number {
+  const [letraA, numA] = a.split("-");
+  const [letraB, numB] = b.split("-");
+  const cmpLetra = letraA.localeCompare(letraB);
+  if (cmpLetra !== 0) return cmpLetra;
+  return (parseInt(numA, 10) || 0) - (parseInt(numB, 10) || 0);
+}
+
 export interface Movimentacao {
   id: string;
   posicao_id: string;

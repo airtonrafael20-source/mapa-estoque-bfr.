@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Local, Posicao, proximaColuna, ruaDaColuna } from "@/lib/types";
+import { Local, Posicao, compararColunas, proximaColuna, ruaDaColuna } from "@/lib/types";
 import { comprimirImagem } from "@/lib/imagem";
 import { Card, PageHeader } from "@/components/ui";
 
@@ -144,7 +144,7 @@ export default function GerenciarPage() {
       mapa.get(rua)!.push(p);
     }
     for (const lista of mapa.values()) {
-      lista.sort((a, b) => a.codigo_coluna.localeCompare(b.codigo_coluna) || a.andar - b.andar);
+      lista.sort((a, b) => compararColunas(a.codigo_coluna, b.codigo_coluna) || a.andar - b.andar);
     }
     return Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [posicoesDoLocal]);

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   Posicao,
   carinhaOcupacao,
+  compararColunas,
   descricaoProduto,
   nivelOcupacao,
   ruaDaColuna,
@@ -96,7 +97,7 @@ export default function MapaPage() {
       mapa.get(p.codigo_coluna)!.push(p);
     }
     for (const lista of mapa.values()) lista.sort((a, b) => a.andar - b.andar);
-    return Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
+    return Array.from(mapa.entries()).sort(([a], [b]) => compararColunas(a, b));
   }, [posicoes]);
 
   const ruas = useMemo(() => {
