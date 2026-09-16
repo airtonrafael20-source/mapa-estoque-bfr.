@@ -77,6 +77,8 @@ export default function GerenciarPage() {
   const [loteLinhas, setLoteLinhas] = useState<LinhaLote[]>(
     TAMANHOS_PADRAO.map((tamanho) => ({ tamanho, codigoBarras: "", quantidade: "" }))
   );
+  const [loteImagem, setLoteImagem] = useState("");
+  const inputImagemLoteRef = useRef<HTMLInputElement>(null);
   const [loteSalvando, setLoteSalvando] = useState(false);
   const [loteErro, setLoteErro] = useState<string | null>(null);
   const [loteAviso, setLoteAviso] = useState<string | null>(null);
@@ -171,6 +173,13 @@ export default function GerenciarPage() {
     setLoteLinhas((prev) => prev.filter((_, i) => i !== indice));
   }
 
+  async function aoEscolherImagemLote(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    if (!arquivo) return;
+    const base64 = await comprimirImagem(arquivo);
+    setLoteImagem(base64);
+  }
+
   async function criarRuaCompleta(e: React.FormEvent) {
     e.preventDefault();
     setLoteErro(null);
@@ -209,6 +218,7 @@ export default function GerenciarPage() {
           marca: loteMarca.trim() || null,
           ano: loteAno.trim() || null,
           codigo_barras: linha.codigoBarras.trim() || null,
+          imagem_base64: loteImagem || null,
           capacidade: capacidadePorAndar,
           quantidade_atual: nesseAndar,
         };
@@ -244,6 +254,8 @@ export default function GerenciarPage() {
       }), com código de barras e quantidade já preenchidos.`
     );
     setLoteProduto("");
+    setLoteImagem("");
+    if (inputImagemLoteRef.current) inputImagemLoteRef.current.value = "";
     setLoteLinhas(TAMANHOS_PADRAO.map((tamanho) => ({ tamanho, codigoBarras: "", quantidade: "" })));
     setTimeout(() => setLoteAviso(null), 6000);
   }
@@ -542,6 +554,16 @@ export default function GerenciarPage() {
           <label className="col-span-1 block min-w-0">
             <span className="mb-1.5 block text-sm text-ink-dim">Capacidade</span>
             <input type="number" min={1} value={loteCapacidade} onChange={(e) => setLoteCapacidade(e.target.value)} className={classeInput} />
+          </label>
+          <label className="col-span-2 block min-w-0 sm:col-span-2 lg:col-span-2">
+            <span className="mb-1.5 block text-sm text-ink-dim">Foto do produto (aplica a todos os tamanhos)</span>
+            <div className="flex items-center gap-2">
+              <input ref={inputImagemLoteRef} type="file" accept="image/*" onChange={aoEscolherImagemLote} className={`${classeInput} p-1.5`} />
+              {loteImagem && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={loteImagem} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
+              )}
+            </div>
           </label>
           <label className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-6">
             <span className="mb-1.5 block text-sm text-ink-dim">Tamanhos, código de barras e quantidade</span>
