@@ -345,6 +345,8 @@ export default function GerenciarPage() {
   async function salvarEdicao(id: string) {
     setSalvando(true);
     const atualizacao = {
+      codigo_coluna: (edicao.codigo_coluna ?? "").trim().toUpperCase(),
+      andar: Number(edicao.andar) || 1,
       produto: edicao.produto || null,
       tamanho: edicao.tamanho || null,
       marca: edicao.marca || null,
@@ -357,11 +359,15 @@ export default function GerenciarPage() {
     };
     const { error } = await supabase.from("posicoes").update(atualizacao).eq("id", id);
     setSalvando(false);
-    if (!error) {
-      setPosicoes((prev) => prev.map((x) => (x.id === id ? { ...x, ...atualizacao } : x)));
-      setEditandoId(null);
-      setEdicao({});
+    if (error) {
+      window.alert(
+        `Não consegui salvar — provavelmente já existe uma posição em "${atualizacao.codigo_coluna}" andar ${atualizacao.andar}.`
+      );
+      return;
     }
+    setPosicoes((prev) => prev.map((x) => (x.id === id ? { ...x, ...atualizacao } : x)));
+    setEditandoId(null);
+    setEdicao({});
   }
 
   async function aoEscolherImagemEdicao(e: React.ChangeEvent<HTMLInputElement>) {
@@ -879,6 +885,20 @@ export default function GerenciarPage() {
                             <tr className="border-b border-border bg-surface-2/40 last:border-0">
                               <td colSpan={9} className="px-4 py-4">
                                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Coluna</span>
+                                    <input value={edicao.codigo_coluna ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, codigo_coluna: e.target.value }))} className={classeInput} />
+                                  </label>
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Andar</span>
+                                    <select value={edicao.andar ?? 1} onChange={(e) => setEdicao((prev) => ({ ...prev, andar: Number(e.target.value) }))} className={classeInput}>
+                                      {[1, 2, 3, 4, 5, 6].map((n) => (
+                                        <option key={n} value={n}>
+                                          {n}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
                                   <label className="col-span-2 block min-w-0 sm:col-span-1 lg:col-span-2">
                                     <span className="mb-1.5 block text-xs text-ink-dim">Produto</span>
                                     <input value={edicao.produto ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, produto: e.target.value }))} className={classeInput} />

@@ -38,13 +38,27 @@ export function proximaColuna(rua: string, colunasExistentes: string[]): string 
   return `${rua.toUpperCase()}-${proximo}`;
 }
 
-/** Compara códigos de coluna numericamente (A-2 antes de A-10), não por texto. */
+/** Compara códigos de coluna "naturalmente" — números são comparados como número,
+ *  não importa quantos pedaços/traços o código tenha (A-2 < A-10 < A-1-2 < A-1-10). */
 export function compararColunas(a: string, b: string): number {
-  const [letraA, numA] = a.split("-");
-  const [letraB, numB] = b.split("-");
-  const cmpLetra = letraA.localeCompare(letraB);
-  if (cmpLetra !== 0) return cmpLetra;
-  return (parseInt(numA, 10) || 0) - (parseInt(numB, 10) || 0);
+  const tokenize = (s: string) => s.match(/(\d+|\D+)/g) ?? [s];
+  const ta = tokenize(a);
+  const tb = tokenize(b);
+  const tamanho = Math.max(ta.length, tb.length);
+  for (let i = 0; i < tamanho; i++) {
+    const xa = ta[i] ?? "";
+    const xb = tb[i] ?? "";
+    const na = Number(xa);
+    const nb = Number(xb);
+    const ambosNumeros = xa !== "" && xb !== "" && !isNaN(na) && !isNaN(nb);
+    if (ambosNumeros) {
+      if (na !== nb) return na - nb;
+    } else {
+      const cmp = xa.localeCompare(xb);
+      if (cmp !== 0) return cmp;
+    }
+  }
+  return 0;
 }
 
 export interface Movimentacao {
