@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   Posicao,
   carinhaOcupacao,
+  cestoLabel,
   compararColunas,
   descricaoProduto,
   nivelOcupacao,
@@ -19,6 +20,17 @@ const CORES_NIVEL: Record<string, { borda: string; texto: string; barra: string 
   baixo: { borda: "border-l-alert", texto: "text-alert", barra: "bg-alert" },
   vazio: { borda: "border-l-border", texto: "text-ink-dim", barra: "bg-border" },
 };
+
+// Classes de borda completa (precisam existir por extenso no código pro Tailwind gerar).
+const BORDA_CARD: Record<string, string> = {
+  cheio: "border-ok",
+  medio: "border-pend",
+  baixo: "border-alert",
+  vazio: "border-border",
+};
+
+// Do pior pro melhor — decide qual cor o card do endereço mostra (o andar mais crítico manda).
+const ORDEM_GRAVIDADE: Record<string, number> = { vazio: 0, baixo: 1, medio: 2, cheio: 3 };
 
 /** Um "andar" desenhado como cesto empilhável de verdade — trapézio, textura de tela. */
 function CestoNivel({ p }: { p: Posicao }) {
@@ -61,6 +73,7 @@ export default function MapaPage() {
   const supabase = useMemo(() => createClient(), []);
   const [posicoes, setPosicoes] = useState<Posicao[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [enderecoAberto, setEnderecoAberto] = useState<string | null>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -143,6 +156,40 @@ export default function MapaPage() {
             .
           </p>
         </Card>
+      ) : enderecoAberto ? (
+        (() => {
+          const niveis = colunas.find(([codigo]) => codigo === enderecoAberto)?.[1] ?? [];
+          const totalColuna = niveis.reduce((s, p) => s + p.quantidade_atual, 0);
+          const capacidadeColuna = niveis.reduce((s, p) => s + p.capacidade, 0);
+          return (
+            <div>
+              <button
+                onClick={() => setEnderecoAberto(null)}
+                className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-accent"
+              >
+                ← Voltar pros endereços
+              </button>
+              <Card className="max-w-md">
+                <div className="mb-2 flex items-baseline justify-between px-1">
+                  <p className="font-display text-lg font-semibold tracking-wide text-ink">
+                    {ruaDaColuna(enderecoAberto)}
+                    {cestoLabel(enderecoAberto) && (
+                      <span className="ml-1.5 text-accent">· {cestoLabel(enderecoAberto)}</span>
+                    )}
+                  </p>
+                  <p className="text-sm text-ink-dim">
+                    <span className="font-semibold text-ink">{totalColuna}</span> / {capacidadeColuna}
+                  </p>
+                </div>
+                <div className="overflow-hidden rounded-b-md border border-t-0 border-border/60 pt-1">
+                  {niveis.map((p) => (
+                    <CestoNivel key={p.id} p={p} />
+                  ))}
+                </div>
+              </Card>
+            </div>
+          );
+        })()
       ) : (
         <>
           <div className="mb-4 flex flex-wrap gap-3 text-sm">
@@ -152,6 +199,12 @@ export default function MapaPage() {
             <span className="inline-flex items-center gap-1.5 rounded-full border border-pend/30 bg-pend/10 px-3 py-1 text-pend">
               🟠😟 {totalBaixas} baixa{totalBaixas === 1 ? "" : "s"}
             </span>
+            <Link
+              href="/mapa-impresso"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-accent"
+            >
+              🖨 Imprimir mapa completo
+            </Link>
           </div>
 
           <div className="flex flex-col gap-6">
@@ -160,26 +213,34 @@ export default function MapaPage() {
                 <h2 className="mb-2 font-display text-sm font-semibold uppercase tracking-widest text-ink-dim">
                   Rua {rua}
                 </h2>
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                   {colunasDaRua.map(([codigo, niveis]) => {
                     const totalColuna = niveis.reduce((s, p) => s + p.quantidade_atual, 0);
                     const capacidadeColuna = niveis.reduce((s, p) => s + p.capacidade, 0);
+                    const piorNivel = niveis
+                      .map((p) => nivelOcupacao(p))
+                      .sort((a, b) => ORDEM_GRAVIDADE[a] - ORDEM_GRAVIDADE[b])[0];
+                    const cor = CORES_NIVEL[piorNivel];
+                    const imagem = niveis.find((p) => p.imagem_base64)?.imagem_base64;
                     return (
-                      <div key={codigo}>
-                        <div className="mb-1.5 flex items-baseline justify-between px-1">
-                          <p className="font-display text-sm font-semibold tracking-wide text-ink">
-                            {codigo}
-                          </p>
-                          <p className="text-xs text-ink-dim">
-                            <span className="font-semibold text-ink">{totalColuna}</span> / {capacidadeColuna}
-                          </p>
-                        </div>
-                        <div className="overflow-hidden rounded-b-md border border-t-0 border-border/60 pt-1">
-                          {niveis.map((p) => (
-                            <CestoNivel key={p.id} p={p} />
-                          ))}
-                        </div>
-                      </div>
+                      <button
+                        key={codigo}
+                        onClick={() => setEnderecoAberto(codigo)}
+                        className={`flex flex-col items-center gap-1.5 rounded-xl border-2 bg-surface p-3 text-center transition hover:brightness-110 ${BORDA_CARD[piorNivel]}`}
+                      >
+                        {imagem ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={imagem} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                        ) : (
+                          <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-surface-2 text-xl">
+                            📦
+                          </span>
+                        )}
+                        <p className="font-display text-sm font-semibold text-ink">{cestoLabel(codigo) ?? codigo}</p>
+                        <p className={`text-xs font-medium ${cor.texto}`}>
+                          {totalColuna}/{capacidadeColuna}
+                        </p>
+                      </button>
                     );
                   })}
                 </div>

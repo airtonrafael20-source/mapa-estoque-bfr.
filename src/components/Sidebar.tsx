@@ -24,6 +24,7 @@ const ITENS = [
   { href: "/inventario", rotulo: "Inventário", icone: IconClipboardCheck },
   { href: "/gerenciar", rotulo: "Gerenciar posições", icone: IconSettings },
   { href: "/etiquetas", rotulo: "Etiquetas / QR", icone: IconPrinter },
+  { href: "/mapa-impresso", rotulo: "Mapa impresso", icone: IconPrinter },
 ];
 
 export default function Sidebar({ nome }: { nome: string }) {

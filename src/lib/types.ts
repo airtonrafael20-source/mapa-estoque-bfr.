@@ -22,20 +22,34 @@ export interface Posicao {
   criado_em: string;
 }
 
-/** Corredor/rua é a letra antes do traço no código da coluna (A-1 → "A"). */
+/** "Rua" agora é o endereço completo (letra + primeiro número): "A-1 C-3" → "A-1". */
 export function ruaDaColuna(codigoColuna: string): string {
-  const parte = codigoColuna.split("-")[0]?.trim();
-  return parte || codigoColuna;
+  const m = codigoColuna.match(/^\s*([A-Za-z]+)\s*-?\s*(\d+)/);
+  if (m) return `${m[1].toUpperCase()}-${m[2]}`;
+  return codigoColuna.split("-")[0]?.trim() || codigoColuna;
 }
 
-/** Sugere o próximo código de coluna dentro de uma rua (A-1, A-2 → sugere A-3). */
+/** Rótulo do cesto dentro do endereço — pega o número que sobra depois do
+ *  endereço e mostra como "C1", "C2"... Funciona tanto pro formato novo
+ *  ("A-1 C-3") quanto pro antigo ("A-1-3"). Sem número sobrando, é null
+ *  (o endereço é o cesto inteiro, sem subdivisão). */
+export function cestoLabel(codigoColuna: string): string | null {
+  const m = codigoColuna.match(/^\s*[A-Za-z]+\s*-?\s*\d+\s*(?:[-\s]*C?[-\s]*(\d+))?/i);
+  if (m && m[1]) return `C${m[1]}`;
+  return null;
+}
+
+/** Sugere o próximo código de cesto dentro de um endereço (A-1 C-1, A-1 C-2 → sugere A-1 C-3). */
 export function proximaColuna(rua: string, colunasExistentes: string[]): string {
   const numeros = colunasExistentes
     .filter((c) => ruaDaColuna(c).toUpperCase() === rua.toUpperCase())
-    .map((c) => parseInt(c.split("-")[1] ?? "0", 10))
+    .map((c) => {
+      const m = c.match(/(\d+)\s*$/);
+      return m ? parseInt(m[1], 10) : NaN;
+    })
     .filter((n) => !isNaN(n));
   const proximo = numeros.length > 0 ? Math.max(...numeros) + 1 : 1;
-  return `${rua.toUpperCase()}-${proximo}`;
+  return `${rua.toUpperCase()} C-${proximo}`;
 }
 
 /** Compara códigos de coluna "naturalmente" — números são comparados como número,

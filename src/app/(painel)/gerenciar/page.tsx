@@ -422,10 +422,11 @@ export default function GerenciarPage() {
     ano: "",
     codigoBarras: "",
     capacidade: "",
+    colunaSequencia: "",
   });
 
   function abrirEdicaoLote() {
-    setEdicaoLote({ produto: "", tamanho: "", marca: "", ano: "", codigoBarras: "", capacidade: "" });
+    setEdicaoLote({ produto: "", tamanho: "", marca: "", ano: "", codigoBarras: "", capacidade: "", colunaSequencia: "" });
     setEditandoLote(true);
   }
 
@@ -439,7 +440,27 @@ export default function GerenciarPage() {
     if (edicaoLote.codigoBarras.trim()) atualizacao.codigo_barras = edicaoLote.codigoBarras.trim();
     if (edicaoLote.capacidade.trim()) atualizacao.capacidade = edicaoLote.capacidade.trim();
 
-    if (Object.keys(atualizacao).length === 0) {
+    // "Coluna inicial (sequência)" — pega o texto+número do primeiro (ex.: "A-1 C-1")
+    // e vai somando 1 no número pra cada selecionada seguinte, na ordem em que aparecem.
+    const sequenciaTexto = edicaoLote.colunaSequencia.trim();
+    let sequenciaPorId: Map<string, string> | null = null;
+    if (sequenciaTexto) {
+      const casamento = sequenciaTexto.match(/^(.*?)(\d+)$/);
+      if (!casamento) {
+        window.alert('A coluna inicial precisa terminar com um número, tipo "A-1 C-1".');
+        return;
+      }
+      const prefixo = casamento[1];
+      const numeroInicial = parseInt(casamento[2], 10);
+      const selecionadasOrdenadas = posicoes
+        .filter((p) => selecionados.has(p.id))
+        .sort((a, b) => compararColunas(a.codigo_coluna, b.codigo_coluna) || a.andar - b.andar);
+      sequenciaPorId = new Map(
+        selecionadasOrdenadas.map((p, indice) => [p.id, `${prefixo}${numeroInicial + indice}`])
+      );
+    }
+
+    if (Object.keys(atualizacao).length === 0 && !sequenciaPorId) {
       setEditandoLote(false);
       return;
     }
@@ -455,8 +476,27 @@ export default function GerenciarPage() {
 
     setProcessandoSelecao(true);
     const ids = Array.from(selecionados);
-    setPosicoes((prev) => prev.map((p) => (selecionados.has(p.id) ? { ...p, ...atualizacao } : p)));
-    await supabase.from("posicoes").update(atualizacao).in("id", ids);
+
+    if (sequenciaPorId) {
+      const mapa = sequenciaPorId;
+      await Promise.all(
+        ids.map((id) =>
+          supabase
+            .from("posicoes")
+            .update({ ...atualizacao, ...(mapa.has(id) ? { codigo_coluna: mapa.get(id) } : {}) })
+            .eq("id", id)
+        )
+      );
+      setPosicoes((prev) =>
+        prev.map((p) =>
+          selecionados.has(p.id) ? { ...p, ...atualizacao, ...(mapa.has(p.id) ? { codigo_coluna: mapa.get(p.id)! } : {}) } : p
+        )
+      );
+    } else {
+      setPosicoes((prev) => prev.map((p) => (selecionados.has(p.id) ? { ...p, ...atualizacao } : p)));
+      await supabase.from("posicoes").update(atualizacao).in("id", ids);
+    }
+
     setSelecionados(new Set());
     setEditandoLote(false);
     setProcessandoSelecao(false);
@@ -508,6 +548,42 @@ export default function GerenciarPage() {
     setPosicoes((prev) =>
       prev.map((p) => (p.codigo_coluna === codigoAtual && p.local_id === localAtivoId ? { ...p, codigo_coluna: destino } : p))
     );
+  }
+
+  async function renomearRua(ruaAtual: string) {
+    const novaRua = window.prompt(`Renomear a Rua ${ruaAtual} pra qual letra/nome? (afeta todas as colunas dela)`, ruaAtual);
+    if (!novaRua || novaRua.trim().toUpperCase() === ruaAtual) return;
+    const destino = novaRua.trim().toUpperCase();
+
+    const afetadas = posicoesDoLocal.filter((p) => ruaDaColuna(p.codigo_coluna) === ruaAtual);
+    if (afetadas.length === 0) return;
+
+    setProcessandoSelecao(true);
+    const resultados = await Promise.all(
+      afetadas.map(async (p) => {
+        const indiceTraco = p.codigo_coluna.indexOf("-");
+        const novoCodigo = indiceTraco === -1 ? destino : destino + p.codigo_coluna.slice(indiceTraco);
+        const { error } = await supabase
+          .from("posicoes")
+          .update({ codigo_coluna: novoCodigo })
+          .eq("id", p.id);
+        return { id: p.id, novoCodigo, erro: !!error };
+      })
+    );
+
+    const semErro = resultados.filter((r) => !r.erro);
+    setPosicoes((prev) =>
+      prev.map((p) => {
+        const achou = semErro.find((r) => r.id === p.id);
+        return achou ? { ...p, codigo_coluna: achou.novoCodigo } : p;
+      })
+    );
+    setProcessandoSelecao(false);
+
+    const comErro = resultados.length - semErro.length;
+    if (comErro > 0) {
+      window.alert(`${comErro} coluna(s) não foram renomeadas (provável colisão com código já existente).`);
+    }
   }
 
   return (
@@ -809,6 +885,17 @@ export default function GerenciarPage() {
                     Só os campos preenchidos abaixo são alterados nas {selecionados.size} selecionadas — deixe
                     em branco o que não quer mudar.
                   </p>
+                  <label className="mb-3 block">
+                    <span className="mb-1.5 block text-xs font-semibold text-accent">
+                      Coluna inicial (sequência automática)
+                    </span>
+                    <input
+                      value={edicaoLote.colunaSequencia}
+                      onChange={(e) => setEdicaoLote((f) => ({ ...f, colunaSequencia: e.target.value }))}
+                      placeholder='Ex.: "A-1 C-1" → a 1ª selecionada vira isso, a 2ª "A-1 C-2", a 3ª "A-1 C-3"...'
+                      className="w-full rounded-lg border border-accent/40 bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                    />
+                  </label>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                     <input
                       value={edicaoLote.produto}
@@ -875,6 +962,14 @@ export default function GerenciarPage() {
                     className="h-4 w-4 accent-accent"
                   />
                   <h3 className="font-display text-lg font-semibold tracking-wide text-ink">Rua {rua}</h3>
+                  <button
+                    type="button"
+                    onClick={() => renomearRua(rua)}
+                    title="Renomear essa rua inteira"
+                    className="rounded-md border border-border px-2 py-1 text-xs text-ink-dim hover:border-accent hover:text-accent"
+                  >
+                    ✎ rua
+                  </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {colunasNaRua.length > 0 && (
