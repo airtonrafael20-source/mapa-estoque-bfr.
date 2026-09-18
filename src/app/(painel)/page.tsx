@@ -50,7 +50,7 @@ function CestoNivel({ p }: { p: Posicao }) {
     >
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 flex-1 truncate text-ink-dim">
-          <span className="font-semibold text-ink">A{p.andar}</span> · {descricaoProduto(p)}
+          <span className="font-semibold text-ink">C{p.andar}</span> · {descricaoProduto(p)}
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
           {p.imagem_base64 && (
@@ -222,6 +222,7 @@ export default function MapaPage() {
                       .sort((a, b) => ORDEM_GRAVIDADE[a] - ORDEM_GRAVIDADE[b])[0];
                     const cor = CORES_NIVEL[piorNivel];
                     const imagem = niveis.find((p) => p.imagem_base64)?.imagem_base64;
+                    const tamanho = niveis.find((p) => p.tamanho)?.tamanho;
                     return (
                       <button
                         key={codigo}
@@ -237,6 +238,11 @@ export default function MapaPage() {
                           </span>
                         )}
                         <p className="font-display text-sm font-semibold text-ink">{cestoLabel(codigo) ?? codigo}</p>
+                        {tamanho && (
+                          <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">
+                            {tamanho}
+                          </span>
+                        )}
                         <p className={`text-xs font-medium ${cor.texto}`}>
                           {totalColuna}/{capacidadeColuna}
                         </p>

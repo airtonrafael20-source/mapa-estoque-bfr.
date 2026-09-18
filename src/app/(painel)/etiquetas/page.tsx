@@ -40,12 +40,25 @@ function EtiquetaImpressa({ p, qr }: { p: Posicao; qr: string | undefined }) {
   return (
     <div className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-surface p-3 text-center print:break-inside-avoid print:border-black print:bg-white print:p-4">
       <p className="font-display text-lg font-bold text-ink print:text-black">
-        {p.codigo_coluna} · A{p.andar}
+        {p.codigo_coluna} · C{p.andar}
       </p>
-      {qr && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={qr} alt={`QR da posição ${p.codigo_coluna} andar ${p.andar}`} className="h-24 w-24" />
-      )}
+
+      {/* Foto + QR lado a lado — mantém a etiqueta compacta mesmo com a imagem */}
+      <div className="flex items-center justify-center gap-2">
+        {p.imagem_base64 && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={p.imagem_base64}
+            alt=""
+            className="h-20 w-20 shrink-0 rounded-lg border border-border object-cover print:border-black"
+          />
+        )}
+        {qr && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={qr} alt={`QR da posição ${p.codigo_coluna} andar ${p.andar}`} className="h-20 w-20 shrink-0" />
+        )}
+      </div>
+
       <p className="line-clamp-2 text-xs text-ink-dim print:text-black">{descricaoCompleta(p)}</p>
       {p.codigo_barras ? (
         <svg ref={barrasRef} className="max-w-full" />
