@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   Posicao,
+  calcularPicking,
   carinhaOcupacao,
   descricaoCompleta,
   nivelOcupacao,
@@ -31,6 +32,7 @@ export default function PosicaoPage({
   const [ajustando, setAjustando] = useState(false);
   const [quantidadeManual, setQuantidadeManual] = useState("");
   const [mensagem, setMensagem] = useState<string | null>(null);
+  const [qtdSeparar, setQtdSeparar] = useState("1");
 
   useEffect(() => {
     let ativo = true;
@@ -203,6 +205,44 @@ export default function PosicaoPage({
         <span className="text-xl font-normal text-ink-dim"> / {posicao.capacidade}</span>
       </p>
       <p className="mb-8 text-sm text-ink-dim">peças nessa posição</p>
+
+      {(posicao.peso_unitario_kg || posicao.distancia_metros) && (
+        <div className="mb-6 w-full max-w-xs rounded-xl border border-border bg-surface-2 p-4 text-left">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-dim">
+              📋 Tempo de separação
+            </span>
+            <input
+              type="number"
+              min={1}
+              value={qtdSeparar}
+              onChange={(e) => setQtdSeparar(e.target.value)}
+              className="w-16 rounded-md border border-border bg-surface px-2 py-1 text-center text-sm text-ink outline-none focus:border-accent"
+            />
+          </div>
+          {(() => {
+            const r = calcularPicking({
+              pesoUnitarioKg: posicao.peso_unitario_kg,
+              distanciaMetros: posicao.distancia_metros,
+              andar: posicao.andar,
+              quantidade: Math.max(1, Number(qtdSeparar) || 1),
+            });
+            return (
+              <>
+                <p className="mb-1 text-sm text-ink">
+                  ⏱️ <span className="font-semibold">{r.tempoTotalSeg}s</span> estimados · ⚖️{" "}
+                  <span className="font-semibold">{r.pesoTotalKg}kg</span> no total
+                </p>
+                <ul className="mt-2 flex flex-col gap-0.5 text-xs text-ink-dim">
+                  {r.alertas.map((a, i) => (
+                    <li key={i}>{a}</li>
+                  ))}
+                </ul>
+              </>
+            );
+          })()}
+        </div>
+      )}
 
       <div className="mb-4 grid w-full max-w-xs grid-cols-2 gap-3">
         <button

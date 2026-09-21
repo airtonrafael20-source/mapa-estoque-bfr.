@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import {
   Posicao,
@@ -13,6 +14,15 @@ import {
   ruaDaColuna,
 } from "@/lib/types";
 import { Card, PageHeader } from "@/components/ui";
+
+const Mapa3DRua = dynamic(() => import("@/components/Mapa3DRua"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[420px] w-full items-center justify-center rounded-xl border border-border bg-surface text-sm text-ink-dim">
+      Carregando 3D…
+    </div>
+  ),
+});
 
 const CORES_NIVEL: Record<string, { borda: string; texto: string; barra: string }> = {
   cheio: { borda: "border-l-ok", texto: "text-ok", barra: "bg-ok" },
@@ -74,6 +84,7 @@ export default function MapaPage() {
   const [posicoes, setPosicoes] = useState<Posicao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [enderecoAberto, setEnderecoAberto] = useState<string | null>(null);
+  const [ruaEm3D, setRuaEm3D] = useState<string | null>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -210,10 +221,25 @@ export default function MapaPage() {
           <div className="flex flex-col gap-6">
             {ruas.map(([rua, colunasDaRua]) => (
               <div key={rua}>
-                <h2 className="mb-2 font-display text-sm font-semibold uppercase tracking-widest text-ink-dim">
-                  Rua {rua}
-                </h2>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-ink-dim">
+                    Rua {rua}
+                  </h2>
+                  <button
+                    onClick={() => setRuaEm3D(ruaEm3D === rua ? null : rua)}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                      ruaEm3D === rua
+                        ? "border-accent bg-accent text-accent-ink"
+                        : "border-accent/30 bg-accent/10 text-accent"
+                    }`}
+                  >
+                    🧊 {ruaEm3D === rua ? "Fechar 3D" : "Ver em 3D"}
+                  </button>
+                </div>
+
+                {ruaEm3D === rua && <Mapa3DRua colunas={colunasDaRua} />}
+
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                   {colunasDaRua.map(([codigo, niveis]) => {
                     const totalColuna = niveis.reduce((s, p) => s + p.quantidade_atual, 0);
                     const capacidadeColuna = niveis.reduce((s, p) => s + p.capacidade, 0);

@@ -169,3 +169,10 @@ alter table posicoes
 -- ------------------------------------------------------------
 alter table configuracoes
   add column if not exists fundo_base64 text;
+
+-- ------------------------------------------------------------
+-- Calculadora de ergonomia/tempo de picking
+-- ------------------------------------------------------------
+alter table posicoes
+  add column if not exists peso_unitario_kg numeric,
+  add column if not exists distancia_metros numeric;

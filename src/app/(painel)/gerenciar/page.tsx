@@ -17,6 +17,8 @@ interface FormNovo {
   capacidade: string;
   quantidade_atual: string;
   imagem: string;
+  pesoUnitario: string;
+  distancia: string;
   aplicarTodosAndares: boolean;
 }
 
@@ -31,6 +33,8 @@ const FORM_VAZIO: FormNovo = {
   capacidade: "40",
   quantidade_atual: "0",
   imagem: "",
+  pesoUnitario: "",
+  distancia: "",
   aplicarTodosAndares: true,
 };
 
@@ -275,6 +279,8 @@ export default function GerenciarPage() {
       ano: form.ano.trim() || null,
       codigo_barras: form.codigo_barras.trim() || null,
       imagem_base64: form.imagem || null,
+      peso_unitario_kg: form.pesoUnitario.trim() ? Number(form.pesoUnitario) : null,
+      distancia_metros: form.distancia.trim() ? Number(form.distancia) : null,
       capacidade: Number(form.capacidade) || 40,
       quantidade_atual: Number(form.quantidade_atual) || 0,
     };
@@ -355,6 +361,8 @@ export default function GerenciarPage() {
       capacidade: Number(edicao.capacidade) || 40,
       quantidade_atual: Math.max(0, Number(edicao.quantidade_atual) || 0),
       imagem_base64: edicao.imagem_base64 || null,
+      peso_unitario_kg: edicao.peso_unitario_kg ?? null,
+      distancia_metros: edicao.distancia_metros ?? null,
       observacoes: edicao.observacoes || null,
     };
     const { error } = await supabase.from("posicoes").update(atualizacao).eq("id", id);
@@ -808,6 +816,29 @@ export default function GerenciarPage() {
             <span className="mb-1.5 block text-sm text-ink-dim">Foto do produto</span>
             <input ref={inputImagemRef} type="file" accept="image/*" onChange={aoEscolherImagem} className={`${classeInput} p-1.5`} />
           </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Peso unitário (kg)</span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.pesoUnitario}
+              onChange={(e) => setForm((f) => ({ ...f, pesoUnitario: e.target.value }))}
+              placeholder="0.20"
+              className={classeInput}
+            />
+          </label>
+          <label className="col-span-1 block min-w-0">
+            <span className="mb-1.5 block text-sm text-ink-dim">Distância (m)</span>
+            <input
+              type="number"
+              min={0}
+              value={form.distancia}
+              onChange={(e) => setForm((f) => ({ ...f, distancia: e.target.value }))}
+              placeholder="15"
+              className={classeInput}
+            />
+          </label>
 
           <label className="col-span-2 flex items-center gap-2 sm:col-span-3 lg:col-span-6">
             <input
@@ -1107,6 +1138,14 @@ export default function GerenciarPage() {
                                   <label className="col-span-1 block min-w-0">
                                     <span className="mb-1.5 block text-xs text-ink-dim">Quantidade atual</span>
                                     <input type="number" min={0} value={edicao.quantidade_atual ?? 0} onChange={(e) => setEdicao((prev) => ({ ...prev, quantidade_atual: Number(e.target.value) }))} className={classeInput} />
+                                  </label>
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Peso unit. (kg)</span>
+                                    <input type="number" min={0} step="0.01" value={edicao.peso_unitario_kg ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, peso_unitario_kg: e.target.value === "" ? null : Number(e.target.value) }))} className={classeInput} />
+                                  </label>
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Distância (m)</span>
+                                    <input type="number" min={0} value={edicao.distancia_metros ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, distancia_metros: e.target.value === "" ? null : Number(e.target.value) }))} className={classeInput} />
                                   </label>
                                   <label className="col-span-2 block min-w-0 sm:col-span-2 lg:col-span-2">
                                     <span className="mb-1.5 block text-xs text-ink-dim">Trocar foto</span>

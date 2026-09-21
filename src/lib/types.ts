@@ -18,6 +18,8 @@ export interface Posicao {
   quantidade_atual: number;
   capacidade: number;
   observacoes: string | null;
+  peso_unitario_kg: number | null;
+  distancia_metros: number | null;
   atualizado_em: string;
   criado_em: string;
 }
@@ -139,4 +141,62 @@ export function descricaoProduto(p: Posicao): string {
 export function descricaoCompleta(p: Posicao): string {
   const partes = [p.produto, p.tamanho, p.marca, p.ano].filter(Boolean);
   return partes.length > 0 ? partes.join(" — ") : "Posição vazia (sem produto atribuído)";
+}
+
+// ------------------------------------------------------------
+// Calculadora de ergonomia / tempo de picking
+// ------------------------------------------------------------
+const LIMITE_CARGA_HUMANA_KG = 15.0; // acima disso, precisa de carrinho
+const VELOCIDADE_CAMINHADA_M_S = 1.2; // velocidade média de um separador a pé
+const ANDAR_ALTURA_CRITICA = 5; // a partir desse andar (de 6), considera "alto" e precisa de escada
+
+export interface ResultadoPicking {
+  pesoTotalKg: number;
+  tempoCaminhadaSeg: number;
+  tempoManuseioSeg: number;
+  tempoTotalSeg: number;
+  precisaCarrinho: boolean;
+  precisaEscada: boolean;
+  alertas: string[];
+}
+
+export function calcularPicking(params: {
+  pesoUnitarioKg: number | null;
+  distanciaMetros: number | null;
+  andar: number;
+  quantidade: number;
+}): ResultadoPicking {
+  const pesoUnitario = params.pesoUnitarioKg ?? 0;
+  const distancia = params.distanciaMetros ?? 0;
+  const pesoTotalKg = pesoUnitario * params.quantidade;
+
+  const tempoCaminhadaSeg = distancia / VELOCIDADE_CAMINHADA_M_S;
+  let tempoManuseioSeg = 5; // tempo base pra coletar no nível fácil
+
+  const alertas: string[] = [];
+  const precisaCarrinho = pesoTotalKg > LIMITE_CARGA_HUMANA_KG;
+  if (precisaCarrinho) {
+    tempoManuseioSeg += 12;
+    alertas.push("⚠️ Excesso de peso — usar carrinho ou dividir a carga.");
+  } else if (pesoUnitario > 0) {
+    alertas.push("✅ Carga adequada pra manuseio manual.");
+  }
+
+  const precisaEscada = params.andar >= ANDAR_ALTURA_CRITICA;
+  if (precisaEscada) {
+    tempoManuseioSeg += 20;
+    alertas.push("🧗 Andar alto — requer escada.");
+  } else {
+    alertas.push("🚶 Acesso direto, sem escada.");
+  }
+
+  return {
+    pesoTotalKg: Math.round(pesoTotalKg * 100) / 100,
+    tempoCaminhadaSeg: Math.round(tempoCaminhadaSeg * 10) / 10,
+    tempoManuseioSeg,
+    tempoTotalSeg: Math.round((tempoCaminhadaSeg + tempoManuseioSeg) * 10) / 10,
+    precisaCarrinho,
+    precisaEscada,
+    alertas,
+  };
 }
