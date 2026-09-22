@@ -18,7 +18,7 @@ export default async function PainelLayout({
 
   const { data: perfil } = await supabase
     .from("perfis")
-    .select("nome")
+    .select("nome, role")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -29,6 +29,7 @@ export default async function PainelLayout({
     .maybeSingle();
 
   const nome = perfil?.nome ?? user.email ?? "Usuário";
+  const role = (perfil?.role as "admin" | "operador" | null) ?? "admin";
   const fundo = config?.fundo_base64 as string | null | undefined;
   const nomeApp = (config?.nome_app as string | null) || "Mapa de Estoque";
   const subtituloApp = (config?.subtitulo_app as string | null) || "BFR Fanáticos";
@@ -44,7 +45,7 @@ export default async function PainelLayout({
           <div className="fixed inset-0 -z-10 bg-bg/70" />
         </>
       )}
-      <Sidebar nome={nome} nomeApp={nomeApp} subtituloApp={subtituloApp} />
+      <Sidebar nome={nome} nomeApp={nomeApp} subtituloApp={subtituloApp} role={role} />
       <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-6 print:p-0 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto w-full max-w-6xl">{children}</div>
       </main>

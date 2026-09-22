@@ -183,3 +183,62 @@ alter table posicoes
 alter table configuracoes
   add column if not exists nome_app text,
   add column if not exists subtitulo_app text;
+
+-- ============================================================
+-- LEVA GRANDE: histórico, permissões, recebimento, alertas,
+-- observações, itens parados, curva ABC
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- Permissões (admin / operador). Todo mundo começa como admin
+-- pra ninguém ficar trancado fora sem querer — você muda quem
+-- for operador depois, em Configurações → Usuários.
+-- ------------------------------------------------------------
+alter table perfis
+  add column if not exists role text not null default 'admin' check (role in ('admin','operador'));
+
+-- ------------------------------------------------------------
+-- Recebimento de mercadoria: novo tipo de movimentação +
+-- campos de fornecedor/nota
+-- ------------------------------------------------------------
+alter table movimentacoes
+  drop constraint if exists movimentacoes_tipo_check;
+alter table movimentacoes
+  add constraint movimentacoes_tipo_check check (tipo in ('retirada','reposicao','ajuste','entrada'));
+alter table movimentacoes
+  add column if not exists fornecedor text,
+  add column if not exists numero_nota text;
+
+-- ------------------------------------------------------------
+-- Estoque mínimo por posição (pra alertas — se não preencher,
+-- o sistema usa a mesma regra de "baixo/vazio" que já existe)
+-- ------------------------------------------------------------
+alter table posicoes
+  add column if not exists estoque_minimo integer;
+
+-- ------------------------------------------------------------
+-- Excluir posições/locais fica restrito a admin (o resto —
+-- ver, criar, ajustar quantidade — continua liberado pra todo
+-- mundo autenticado, incluindo operador)
+-- ------------------------------------------------------------
+drop policy if exists "posicoes_all" on posicoes;
+create policy "posicoes_select" on posicoes for select to authenticated using (true);
+create policy "posicoes_insert" on posicoes for insert to authenticated with check (true);
+create policy "posicoes_update" on posicoes for update to authenticated using (true) with check (true);
+create policy "posicoes_delete_admin" on posicoes for delete to authenticated using (
+  exists (select 1 from perfis where id = auth.uid() and role = 'admin')
+);
+
+drop policy if exists "locais_all" on locais;
+create policy "locais_select" on locais for select to authenticated using (true);
+create policy "locais_insert" on locais for insert to authenticated with check (true);
+create policy "locais_update" on locais for update to authenticated using (true) with check (true);
+create policy "locais_delete_admin" on locais for delete to authenticated using (
+  exists (select 1 from perfis where id = auth.uid() and role = 'admin')
+);
+
+-- perfis: admin consegue ver/mudar o role de todo mundo (pra tela de Usuários)
+drop policy if exists "perfis_update" on perfis;
+create policy "perfis_update_proprio_ou_admin" on perfis for update to authenticated using (
+  auth.uid() = id or exists (select 1 from perfis p2 where p2.id = auth.uid() and p2.role = 'admin')
+);

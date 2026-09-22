@@ -20,6 +20,7 @@ export interface Posicao {
   observacoes: string | null;
   peso_unitario_kg: number | null;
   distancia_metros: number | null;
+  estoque_minimo: number | null;
   atualizado_em: string;
   criado_em: string;
 }
@@ -80,10 +81,12 @@ export function compararColunas(a: string, b: string): number {
 export interface Movimentacao {
   id: string;
   posicao_id: string;
-  tipo: "retirada" | "reposicao" | "ajuste";
+  tipo: "retirada" | "reposicao" | "ajuste" | "entrada";
   quantidade: number;
   quantidade_resultante: number;
   responsavel_nome: string;
+  fornecedor: string | null;
+  numero_nota: string | null;
   criado_em: string;
 }
 

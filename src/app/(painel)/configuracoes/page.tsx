@@ -5,6 +5,14 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, PageHeader } from "@/components/ui";
 import LogoUploader from "@/components/LogoUploader";
 import TrocarFundo from "@/components/TrocarFundo";
+import RequerAdmin from "@/components/RequerAdmin";
+
+interface Perfil {
+  id: string;
+  nome: string;
+  email: string;
+  role: "admin" | "operador";
+}
 
 export default function ConfiguracoesPage() {
   const [supabase] = useState(() => createClient());
@@ -14,6 +22,10 @@ export default function ConfiguracoesPage() {
   const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  const [perfis, setPerfis] = useState<Perfil[]>([]);
+  const [carregandoPerfis, setCarregandoPerfis] = useState(true);
+  const [meuId, setMeuId] = useState("");
 
   useEffect(() => {
     let ativo = true;
@@ -28,6 +40,21 @@ export default function ConfiguracoesPage() {
         setSubtituloApp((data?.subtitulo_app as string | null) || "BFR Fanáticos");
         setCarregando(false);
       });
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user && ativo) setMeuId(user.id);
+    });
+
+    supabase
+      .from("perfis")
+      .select("id, nome, email, role")
+      .order("nome", { ascending: true })
+      .then(({ data }) => {
+        if (!ativo) return;
+        setPerfis((data as Perfil[]) ?? []);
+        setCarregandoPerfis(false);
+      });
+
     return () => {
       ativo = false;
     };
@@ -57,12 +84,18 @@ export default function ConfiguracoesPage() {
     setTimeout(() => window.location.reload(), 700);
   }
 
+  async function mudarRole(id: string, novoRole: "admin" | "operador") {
+    setPerfis((prev) => prev.map((p) => (p.id === id ? { ...p, role: novoRole } : p)));
+    await supabase.from("perfis").update({ role: novoRole }).eq("id", id);
+  }
+
   const classeInput =
     "w-full min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-ink outline-none focus:border-accent";
 
   return (
+    <RequerAdmin>
     <div>
-      <PageHeader titulo="Configurações" subtitulo="Nome do sistema, logo e fundo de tela." />
+      <PageHeader titulo="Configurações" subtitulo="Nome do sistema, logo, fundo de tela e permissões." />
 
       <Card className="mb-4">
         <h2 className="mb-4 font-display text-base font-semibold tracking-wide text-ink">
@@ -102,13 +135,50 @@ export default function ConfiguracoesPage() {
         <LogoUploader tamanho={64} />
       </Card>
 
-      <Card>
+      <Card className="mb-4">
         <h2 className="mb-3 font-display text-base font-semibold tracking-wide text-ink">FUNDO DE TELA</h2>
         <p className="mb-3 text-sm text-ink-dim">Escolhe um tema pronto ou sobe sua própria foto.</p>
         <div className="max-w-xs">
           <TrocarFundo />
         </div>
       </Card>
+
+      <Card>
+        <h2 className="mb-1 font-display text-base font-semibold tracking-wide text-ink">USUÁRIOS E PERMISSÕES</h2>
+        <p className="mb-4 text-sm text-ink-dim">
+          <b>Admin</b> mexe em tudo, incluindo Gerenciar posições e Configurações. <b>Operador</b> usa Mapa,
+          Bipar, Inventário, Recebimento etc., mas não consegue excluir posições, renomear ruas nem entrar
+          aqui em Configurações.
+        </p>
+        {carregandoPerfis ? (
+          <p className="text-sm text-ink-dim">Carregando…</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {perfis.map((p) => (
+              <div
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-ink">
+                    {p.nome} {p.id === meuId && <span className="text-xs text-ink-dim">(você)</span>}
+                  </p>
+                  <p className="truncate text-xs text-ink-dim">{p.email}</p>
+                </div>
+                <select
+                  value={p.role}
+                  onChange={(e) => mudarRole(p.id, e.target.value as "admin" | "operador")}
+                  className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="operador">Operador</option>
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
+    </RequerAdmin>
   );
 }

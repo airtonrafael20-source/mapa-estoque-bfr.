@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Local, Posicao, compararColunas, proximaColuna, ruaDaColuna } from "@/lib/types";
 import { comprimirImagem } from "@/lib/imagem";
 import { Card, PageHeader } from "@/components/ui";
+import RequerAdmin from "@/components/RequerAdmin";
 
 interface FormNovo {
   codigo_coluna: string;
@@ -362,6 +363,7 @@ export default function GerenciarPage() {
       quantidade_atual: Math.max(0, Number(edicao.quantidade_atual) || 0),
       imagem_base64: edicao.imagem_base64 || null,
       peso_unitario_kg: edicao.peso_unitario_kg ?? null,
+      estoque_minimo: edicao.estoque_minimo ?? null,
       distancia_metros: edicao.distancia_metros ?? null,
       observacoes: edicao.observacoes || null,
     };
@@ -595,6 +597,7 @@ export default function GerenciarPage() {
   }
 
   return (
+    <RequerAdmin>
     <div>
       <PageHeader
         titulo="Gerenciar posições"
@@ -1147,6 +1150,14 @@ export default function GerenciarPage() {
                                     <span className="mb-1.5 block text-xs text-ink-dim">Distância (m)</span>
                                     <input type="number" min={0} value={edicao.distancia_metros ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, distancia_metros: e.target.value === "" ? null : Number(e.target.value) }))} className={classeInput} />
                                   </label>
+                                  <label className="col-span-1 block min-w-0">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Estoque mínimo</span>
+                                    <input type="number" min={0} value={edicao.estoque_minimo ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, estoque_minimo: e.target.value === "" ? null : Number(e.target.value) }))} placeholder="alerta abaixo disso" className={classeInput} />
+                                  </label>
+                                  <label className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-3">
+                                    <span className="mb-1.5 block text-xs text-ink-dim">Observações</span>
+                                    <input value={edicao.observacoes ?? ""} onChange={(e) => setEdicao((prev) => ({ ...prev, observacoes: e.target.value }))} placeholder="Ex.: separado pro evento X" className={classeInput} />
+                                  </label>
                                   <label className="col-span-2 block min-w-0 sm:col-span-2 lg:col-span-2">
                                     <span className="mb-1.5 block text-xs text-ink-dim">Trocar foto</span>
                                     <input type="file" accept="image/*" onChange={aoEscolherImagemEdicao} className={`${classeInput} p-1.5`} />
@@ -1179,5 +1190,6 @@ export default function GerenciarPage() {
         </div>
       )}
     </div>
+    </RequerAdmin>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Local, Posicao, compararColunas, descricaoProduto } from "@/lib/types";
+import { beepErro, beepSucesso } from "@/lib/som";
 import { Card, PageHeader } from "@/components/ui";
 
 export default function InventarioPage() {
@@ -21,6 +22,9 @@ export default function InventarioPage() {
   const [entradaBip, setEntradaBip] = useState("");
   const [avisoBip, setAvisoBip] = useState<string | null>(null);
   const [ajusteManual, setAjusteManual] = useState(false);
+  const [conferenciaDupla, setConferenciaDupla] = useState(false);
+  const [primeiraContagem, setPrimeiraContagem] = useState<number | null>(null);
+  const [avisoDupla, setAvisoDupla] = useState<string | null>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -81,11 +85,13 @@ export default function InventarioPage() {
     if (!codigo || !posicaoAtual) return;
 
     if (posicaoAtual.codigo_barras && codigo !== posicaoAtual.codigo_barras) {
+      beepErro();
       setAvisoBip(`Esse código não é dessa posição (esperado: ${posicaoAtual.codigo_barras}).`);
       setTimeout(() => setAvisoBip(null), 2500);
       return;
     }
 
+    beepSucesso();
     setAvisoBip(null);
     setContagem((atual) => atual + 1);
   }
@@ -97,6 +103,8 @@ export default function InventarioPage() {
     setConcluidos([]);
     setAjusteManual(false);
     setEntradaBip("");
+    setPrimeiraContagem(null);
+    setAvisoDupla(null);
     setInventariando(true);
   }
 
@@ -104,6 +112,8 @@ export default function InventarioPage() {
     setInventariando(false);
     setEnderecoEscolhido("");
     setConcluidos([]);
+    setPrimeiraContagem(null);
+    setAvisoDupla(null);
   }
 
   async function registrarNome(): Promise<string> {
@@ -115,9 +125,8 @@ export default function InventarioPage() {
     return perfil?.nome ?? user.email ?? "Usuário";
   }
 
-  async function confirmarAndar() {
+  async function salvarContagemFinal(valor: number) {
     if (!posicaoAtual) return;
-    const valor = Math.max(0, contagem);
     setSalvando(true);
 
     if (valor !== posicaoAtual.quantidade_atual) {
@@ -141,7 +150,42 @@ export default function InventarioPage() {
     setContagem(0);
     setAjusteManual(false);
     setEntradaBip("");
+    setPrimeiraContagem(null);
+    setAvisoDupla(null);
     setPassoAtual((p) => p + 1);
+  }
+
+  async function confirmarAndar() {
+    if (!posicaoAtual) return;
+    const valor = Math.max(0, contagem);
+
+    if (!conferenciaDupla) {
+      await salvarContagemFinal(valor);
+      return;
+    }
+
+    // Conferência em dupla: a primeira confirmação só guarda o número e
+    // pede pra contar de novo; só salva quando as duas baterem.
+    if (primeiraContagem === null) {
+      setPrimeiraContagem(valor);
+      setContagem(0);
+      setAjusteManual(false);
+      setEntradaBip("");
+      setAvisoDupla(`1ª contagem: ${valor}. Agora conte de novo, do zero, pra confirmar.`);
+      return;
+    }
+
+    if (valor === primeiraContagem) {
+      await salvarContagemFinal(valor);
+    } else {
+      setAvisoDupla(
+        `⚠️ As duas contagens não bateram (1ª: ${primeiraContagem}, 2ª: ${valor}). Recontando do zero — bipe/digite com calma.`
+      );
+      setPrimeiraContagem(null);
+      setContagem(0);
+      setAjusteManual(false);
+      setEntradaBip("");
+    }
   }
 
   const classeInput =
@@ -186,6 +230,15 @@ export default function InventarioPage() {
               ▶ Iniciar inventário
             </button>
           </div>
+          <label className="mt-4 flex items-center gap-2 text-sm text-ink-dim">
+            <input
+              type="checkbox"
+              checked={conferenciaDupla}
+              onChange={(e) => setConferenciaDupla(e.target.checked)}
+              className="h-4 w-4 accent-accent"
+            />
+            👥 Conferência em dupla (conta duas vezes cada cesto pra evitar erro)
+          </label>
         </Card>
       ) : (
         <Card>
@@ -273,12 +326,24 @@ export default function InventarioPage() {
                 </div>
               )}
 
+              {avisoDupla && (
+                <p className="mx-auto mb-3 max-w-xs rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
+                  {avisoDupla}
+                </p>
+              )}
+
               <button
                 onClick={confirmarAndar}
                 disabled={salvando}
                 className="mx-auto block w-full max-w-xs rounded-lg bg-ok px-4 py-3 font-semibold text-white disabled:opacity-50"
               >
-                {salvando ? "Salvando…" : `✔ Confirmar ${contagem} e próximo cesto`}
+                {salvando
+                  ? "Salvando…"
+                  : conferenciaDupla && primeiraContagem === null
+                  ? `Confirmar 1ª contagem (${contagem})`
+                  : conferenciaDupla
+                  ? `Confirmar 2ª contagem (${contagem})`
+                  : `✔ Confirmar ${contagem} e próximo cesto`}
               </button>
 
               {concluidos.length > 0 && (

@@ -7,22 +7,37 @@ import { createClient } from "@/lib/supabase/client";
 import LogoUploader from "@/components/LogoUploader";
 import TrocarFundo from "@/components/TrocarFundo";
 import {
+  IconAlertTriangle,
   IconBarcode,
+  IconChartBar,
   IconClipboardCheck,
+  IconHistory,
   IconLayoutGrid,
   IconLogout,
   IconMenu2,
+  IconPackageImport,
   IconPrinter,
   IconSearch,
   IconSettings,
   IconSettings2,
 } from "@tabler/icons-react";
 
-const ITENS = [
+type Papel = "admin" | "operador";
+
+const ITENS_TODOS = [
   { href: "/", rotulo: "Mapa", icone: IconLayoutGrid },
+  { href: "/dashboard", rotulo: "Dashboard", icone: IconChartBar },
   { href: "/bipar", rotulo: "Bipar", icone: IconBarcode },
   { href: "/buscar", rotulo: "Buscar produto", icone: IconSearch },
   { href: "/inventario", rotulo: "Inventário", icone: IconClipboardCheck },
+  { href: "/recebimento", rotulo: "Recebimento", icone: IconPackageImport },
+  { href: "/alertas", rotulo: "Alertas", icone: IconAlertTriangle },
+  { href: "/historico", rotulo: "Histórico", icone: IconHistory },
+  { href: "/historico-inventarios", rotulo: "Histórico de inventários", icone: IconHistory },
+  { href: "/giro", rotulo: "Giro de estoque", icone: IconChartBar },
+];
+
+const ITENS_ADMIN = [
   { href: "/gerenciar", rotulo: "Gerenciar posições", icone: IconSettings },
   { href: "/etiquetas", rotulo: "Etiquetas / QR", icone: IconPrinter },
   { href: "/mapa-impresso", rotulo: "Mapa impresso", icone: IconPrinter },
@@ -33,15 +48,19 @@ export default function Sidebar({
   nome,
   nomeApp,
   subtituloApp,
+  role,
 }: {
   nome: string;
   nomeApp: string;
   subtituloApp: string;
+  role: Papel;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   const [aberto, setAberto] = useState(false);
+
+  const itens = role === "admin" ? [...ITENS_TODOS, ...ITENS_ADMIN] : ITENS_TODOS;
 
   async function sair() {
     await supabase.auth.signOut();
@@ -62,8 +81,8 @@ export default function Sidebar({
       </div>
 
       <nav className="flex flex-1 flex-col gap-1">
-        {ITENS.map((item) => {
-          const ativo = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+        {itens.map((item) => {
+          const ativo = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(item.href + "/");
           const Icone = item.icone;
           return (
             <Link
@@ -84,7 +103,9 @@ export default function Sidebar({
       </nav>
 
       <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
-        <p className="mb-1 truncate px-1 text-xs text-ink-dim">{nome}</p>
+        <p className="mb-1 truncate px-1 text-xs text-ink-dim">
+          {nome} {role === "operador" && <span className="text-ink-dim">· operador</span>}
+        </p>
         <TrocarFundo />
         <button
           onClick={sair}

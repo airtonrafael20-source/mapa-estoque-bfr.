@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Posicao, compararColunas, descricaoProduto } from "@/lib/types";
+import { beepErro, beepSucesso } from "@/lib/som";
 import { Card, PageHeader } from "@/components/ui";
 
 type Estado = "lendo" | "buscando" | "nao_encontrado" | "erro_camera";
@@ -108,6 +109,7 @@ export default function BiparPage() {
     const marcador = "/posicao/";
     const indice = texto.indexOf(marcador);
     if (indice !== -1) {
+      beepSucesso();
       await pararCamera();
       router.push(texto.slice(indice));
       return;
@@ -127,12 +129,14 @@ export default function BiparPage() {
     const encontradas = (data as Posicao[]) ?? [];
 
     if (encontradas.length === 1) {
+      beepSucesso();
       await pararCamera();
       router.push(`/posicao/${encodeURIComponent(encontradas[0].codigo_coluna)}/${encontradas[0].andar}`);
       return;
     }
 
     if (encontradas.length > 1) {
+      beepSucesso();
       await pararCamera();
       const ordenadas = [...encontradas].sort(
         (a, b) => compararColunas(a.codigo_coluna, b.codigo_coluna) || a.andar - b.andar
@@ -142,6 +146,7 @@ export default function BiparPage() {
       return;
     }
 
+    beepErro();
     await pararCamera();
     setOpcoes([]);
     setEstado("nao_encontrado");

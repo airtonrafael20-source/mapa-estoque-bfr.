@@ -14,6 +14,7 @@ import {
   ruaDaColuna,
 } from "@/lib/types";
 import { Card, PageHeader } from "@/components/ui";
+import { baixarCsv } from "@/lib/csv";
 
 const Mapa3DRua = dynamic(() => import("@/components/Mapa3DRua"), {
   ssr: false,
@@ -136,6 +137,24 @@ export default function MapaPage() {
 
   const totalVazias = posicoes.filter((p) => nivelOcupacao(p) === "vazio").length;
   const totalBaixas = posicoes.filter((p) => nivelOcupacao(p) === "baixo").length;
+
+  function exportarCsv() {
+    baixarCsv(
+      `estoque-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["Endereço", "Andar", "Produto", "Tamanho", "Marca", "Ano", "Código de barras", "Quantidade", "Capacidade"],
+      posicoes.map((p) => [
+        p.codigo_coluna,
+        p.andar,
+        p.produto ?? "",
+        p.tamanho ?? "",
+        p.marca ?? "",
+        p.ano ?? "",
+        p.codigo_barras ?? "",
+        p.quantidade_atual,
+        p.capacidade,
+      ])
+    );
+  }
   const totalGeral = posicoes.reduce((s, p) => s + p.quantidade_atual, 0);
   const capacidadeGeral = posicoes.reduce((s, p) => s + p.capacidade, 0);
 
@@ -216,6 +235,12 @@ export default function MapaPage() {
             >
               🖨 Imprimir mapa completo
             </Link>
+            <button
+              onClick={exportarCsv}
+              className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-accent"
+            >
+              📄 Exportar CSV
+            </button>
           </div>
 
           <div className="flex flex-col gap-6">
