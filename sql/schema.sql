@@ -176,3 +176,10 @@ alter table configuracoes
 alter table posicoes
   add column if not exists peso_unitario_kg numeric,
   add column if not exists distancia_metros numeric;
+
+-- ------------------------------------------------------------
+-- Nome do app editável (aparece no menu, login e relatórios)
+-- ------------------------------------------------------------
+alter table configuracoes
+  add column if not exists nome_app text,
+  add column if not exists subtitulo_app text;

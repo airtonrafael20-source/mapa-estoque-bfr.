@@ -15,6 +15,7 @@ import {
   IconPrinter,
   IconSearch,
   IconSettings,
+  IconSettings2,
 } from "@tabler/icons-react";
 
 const ITENS = [
@@ -25,9 +26,18 @@ const ITENS = [
   { href: "/gerenciar", rotulo: "Gerenciar posições", icone: IconSettings },
   { href: "/etiquetas", rotulo: "Etiquetas / QR", icone: IconPrinter },
   { href: "/mapa-impresso", rotulo: "Mapa impresso", icone: IconPrinter },
+  { href: "/configuracoes", rotulo: "Configurações", icone: IconSettings2 },
 ];
 
-export default function Sidebar({ nome }: { nome: string }) {
+export default function Sidebar({
+  nome,
+  nomeApp,
+  subtituloApp,
+}: {
+  nome: string;
+  nomeApp: string;
+  subtituloApp: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -45,9 +55,9 @@ export default function Sidebar({ nome }: { nome: string }) {
         <LogoUploader tamanho={40} />
         <div className="min-w-0">
           <p className="font-display text-sm font-semibold tracking-wide text-ink truncate">
-            MAPA DE ESTOQUE
+            {nomeApp.toUpperCase()}
           </p>
-          <p className="text-xs text-ink-dim truncate">BFR Fanáticos</p>
+          <p className="text-xs text-ink-dim truncate">{subtituloApp}</p>
         </div>
       </div>
 
@@ -92,7 +102,7 @@ export default function Sidebar({ nome }: { nome: string }) {
       <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 print:hidden lg:hidden">
         <div className="flex min-w-0 items-center gap-2">
           <LogoUploader tamanho={32} editavel={false} />
-          <span className="truncate font-display text-sm font-semibold tracking-wide">MAPA DE ESTOQUE</span>
+          <span className="truncate font-display text-sm font-semibold tracking-wide">{nomeApp.toUpperCase()}</span>
         </div>
         <button
           onClick={() => setAberto(true)}

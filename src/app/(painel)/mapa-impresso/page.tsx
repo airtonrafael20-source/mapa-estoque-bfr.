@@ -11,22 +11,25 @@ export default function MapaImpressoPage() {
   const [locais, setLocais] = useState<Local[]>([]);
   const [posicoes, setPosicoes] = useState<Posicao[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [nomeApp, setNomeApp] = useState("Mapa de estoque");
 
   useEffect(() => {
     let ativo = true;
     async function carregar() {
       setCarregando(true);
-      const [{ data: dLocais }, { data: dPos }] = await Promise.all([
+      const [{ data: dLocais }, { data: dPos }, { data: dConfig }] = await Promise.all([
         supabase.from("locais").select("*").order("criado_em", { ascending: true }),
         supabase
           .from("posicoes")
           .select("*")
           .order("codigo_coluna", { ascending: true })
           .order("andar", { ascending: true }),
+        supabase.from("configuracoes").select("nome_app").eq("id", 1).maybeSingle(),
       ]);
       if (ativo) {
         setLocais((dLocais as Local[]) ?? []);
         setPosicoes((dPos as Posicao[]) ?? []);
+        if (dConfig?.nome_app) setNomeApp(dConfig.nome_app as string);
         setCarregando(false);
       }
     }
@@ -87,7 +90,7 @@ export default function MapaImpressoPage() {
               <LogoUploader tamanho={40} editavel={false} />
               <div className="min-w-0">
                 <p className="font-display text-xs font-semibold uppercase tracking-widest text-accent print:text-black">
-                  Mapa de estoque
+                  Mapa de estoque — {nomeApp}
                 </p>
                 <h2 className="font-display text-xl font-bold text-ink print:text-black">{local.nome}</h2>
                 <p className="text-xs text-ink-dim print:text-black">

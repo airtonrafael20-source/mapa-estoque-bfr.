@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import LogoUploader from "@/components/LogoUploader";
@@ -12,6 +12,21 @@ export default function LoginPage() {
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [nomeApp, setNomeApp] = useState("Mapa de Estoque");
+  const [subtituloApp, setSubtituloApp] = useState("BFR Fanáticos");
+
+  useEffect(() => {
+    supabase
+      .from("configuracoes")
+      .select("nome_app, subtitulo_app")
+      .eq("id", 1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.nome_app) setNomeApp(data.nome_app as string);
+        if (data?.subtitulo_app) setSubtituloApp(data.subtitulo_app as string);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
@@ -42,9 +57,9 @@ export default function LoginPage() {
             <LogoUploader tamanho={56} editavel={false} />
           </div>
           <h1 className="font-display text-2xl font-semibold tracking-wide text-ink break-words">
-            MAPA DE ESTOQUE
+            {nomeApp.toUpperCase()}
           </h1>
-          <p className="mt-1 text-sm text-ink-dim break-words">BFR Fanáticos — acesso restrito</p>
+          <p className="mt-1 text-sm text-ink-dim break-words">{subtituloApp} — acesso restrito</p>
         </div>
 
         <form
