@@ -5,8 +5,10 @@ import { createClient } from "@/lib/supabase/client";
 import { Posicao, descricaoProduto } from "@/lib/types";
 import { Card, PageHeader } from "@/components/ui";
 import { beepErro, beepSucesso } from "@/lib/som";
+import { useUI } from "@/components/ui-feedback";
 
 export default function RecebimentoPage() {
+  const { toast } = useUI();
   const [supabase] = useState(() => createClient());
   const [codigoBarras, setCodigoBarras] = useState("");
   const [posicoesEncontradas, setPosicoesEncontradas] = useState<Posicao[]>([]);
@@ -88,6 +90,7 @@ export default function RecebimentoPage() {
     });
 
     setRecebidosHoje((prev) => [{ produto: descricaoProduto(posicaoEscolhida), qtd }, ...prev]);
+    toast(`Recebido: ${qtd} — ${descricaoProduto(posicaoEscolhida)}`);
     setAviso(`Recebido: ${qtd} — ${descricaoProduto(posicaoEscolhida)}`);
     setTimeout(() => setAviso(null), 3000);
 

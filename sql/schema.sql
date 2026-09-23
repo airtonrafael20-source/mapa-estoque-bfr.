@@ -242,3 +242,11 @@ drop policy if exists "perfis_update" on perfis;
 create policy "perfis_update_proprio_ou_admin" on perfis for update to authenticated using (
   auth.uid() = id or exists (select 1 from perfis p2 where p2.id = auth.uid() and p2.role = 'admin')
 );
+
+-- ------------------------------------------------------------
+-- Branding completo: cor principal + rodapé "desenvolvido por"
+-- ------------------------------------------------------------
+alter table configuracoes
+  add column if not exists cor_principal text,
+  add column if not exists rodape_texto text,
+  add column if not exists rodape_link text;

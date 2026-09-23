@@ -5,8 +5,11 @@ import { createClient } from "@/lib/supabase/client";
 import { Local, Posicao, compararColunas, descricaoProduto } from "@/lib/types";
 import { beepErro, beepSucesso } from "@/lib/som";
 import { Card, PageHeader } from "@/components/ui";
+import Ajuda from "@/components/Ajuda";
+import { useUI } from "@/components/ui-feedback";
 
 export default function InventarioPage() {
+  const { toast } = useUI();
   const supabase = useMemo(() => createClient(), []);
   const [locais, setLocais] = useState<Local[]>([]);
   const [localAtivoId, setLocalAtivoId] = useState("");
@@ -152,6 +155,9 @@ export default function InventarioPage() {
     setEntradaBip("");
     setPrimeiraContagem(null);
     setAvisoDupla(null);
+    if (passoAtual + 1 >= andaresDoEndereco.length) {
+      toast(`Endereço ${enderecoEscolhido} concluído!`);
+    }
     setPassoAtual((p) => p + 1);
   }
 
@@ -196,6 +202,9 @@ export default function InventarioPage() {
       <PageHeader
         titulo="Inventário"
         subtitulo="Escolha um endereço, inicie, e bipe cada peça daquele cesto — o total soma sozinho e já vai pro sistema."
+        ajuda={
+          <Ajuda texto="Escolha o Local e o Endereço (coluna/cesto), clique em Iniciar, e para cada andar bipe as peças uma por uma — o número sobe sozinho. Ligue 'Conferência em dupla' se quiser contar duas vezes antes de salvar." />
+        }
       />
 
       {!inventariando ? (

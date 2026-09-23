@@ -6,6 +6,7 @@ import { Local, Posicao, compararColunas, proximaColuna, ruaDaColuna } from "@/l
 import { comprimirImagem } from "@/lib/imagem";
 import { Card, PageHeader } from "@/components/ui";
 import RequerAdmin from "@/components/RequerAdmin";
+import { useUI } from "@/components/ui-feedback";
 
 interface FormNovo {
   codigo_coluna: string;
@@ -46,6 +47,7 @@ const classeInput =
 
 export default function GerenciarPage() {
   const supabase = useMemo(() => createClient(), []);
+  const { confirmar, perguntar, avisar, toast } = useUI();
   const [locais, setLocais] = useState<Local[]>([]);
   const [localAtivoId, setLocalAtivoId] = useState<string>("");
   const [novoLocal, setNovoLocal] = useState("");
@@ -370,12 +372,13 @@ export default function GerenciarPage() {
     const { error } = await supabase.from("posicoes").update(atualizacao).eq("id", id);
     setSalvando(false);
     if (error) {
-      window.alert(
+      await avisar(
         `Não consegui salvar — provavelmente já existe uma posição em "${atualizacao.codigo_coluna}" andar ${atualizacao.andar}.`
       );
       return;
     }
     setPosicoes((prev) => prev.map((x) => (x.id === id ? { ...x, ...atualizacao } : x)));
+    toast("Posição atualizada.");
     setEditandoId(null);
     setEdicao({});
   }
@@ -388,7 +391,7 @@ export default function GerenciarPage() {
   }
 
   async function excluirPosicao(p: Posicao) {
-    if (!window.confirm(`Excluir a posição ${p.codigo_coluna} · andar ${p.andar}?`)) return;
+    if (!(await confirmar(`Excluir a posição ${p.codigo_coluna} · andar ${p.andar}?`, { perigoso: true }))) return;
     setPosicoes((prev) => prev.filter((x) => x.id !== p.id));
     await supabase.from("posicoes").delete().eq("id", p.id);
   }
@@ -415,13 +418,14 @@ export default function GerenciarPage() {
 
   async function excluirSelecionados() {
     if (selecionados.size === 0) return;
-    if (!window.confirm(`Excluir ${selecionados.size} posições selecionadas? Isso não pode ser desfeito.`)) return;
+    if (!(await confirmar(`Excluir ${selecionados.size} posições selecionadas? Isso não pode ser desfeito.`, { perigoso: true }))) return;
     setProcessandoSelecao(true);
     const ids = Array.from(selecionados);
     setPosicoes((prev) => prev.filter((p) => !selecionados.has(p.id)));
     await supabase.from("posicoes").delete().in("id", ids);
     setSelecionados(new Set());
     setProcessandoSelecao(false);
+    toast("Posições excluídas.");
   }
 
   const [editandoLote, setEditandoLote] = useState(false);
@@ -457,7 +461,7 @@ export default function GerenciarPage() {
     if (sequenciaTexto) {
       const casamento = sequenciaTexto.match(/^(.*?)(\d+)$/);
       if (!casamento) {
-        window.alert('A coluna inicial precisa terminar com um número, tipo "A-1 C-1".');
+        await avisar('A coluna inicial precisa terminar com um número, tipo "A-1 C-1".');
         return;
       }
       const prefixo = casamento[1];
@@ -476,11 +480,11 @@ export default function GerenciarPage() {
     }
 
     if (
-      !window.confirm(
+      !(await confirmar(
         `Aplicar essas mudanças em ${selecionados.size} posição${selecionados.size === 1 ? "" : "ões"} selecionada${
           selecionados.size === 1 ? "" : "s"
         }?`
-      )
+      ))
     )
       return;
 
@@ -510,14 +514,16 @@ export default function GerenciarPage() {
     setSelecionados(new Set());
     setEditandoLote(false);
     setProcessandoSelecao(false);
+    toast("Alterações aplicadas em lote.");
   }
 
   async function limparSelecionados() {
     if (selecionados.size === 0) return;
     if (
-      !window.confirm(
-        `Limpar ${selecionados.size} posições selecionadas? Isso apaga o produto/tamanho/foto e zera a quantidade, mas mantém a posição cadastrada (coluna e andar continuam existindo, vazios).`
-      )
+      !(await confirmar(
+        `Limpar ${selecionados.size} posições selecionadas? Isso apaga o produto/tamanho/foto e zera a quantidade, mas mantém a posição cadastrada (coluna e andar continuam existindo, vazios).`,
+        { perigoso: true }
+      ))
     )
       return;
     setProcessandoSelecao(true);
@@ -535,10 +541,11 @@ export default function GerenciarPage() {
     await supabase.from("posicoes").update(limpo).in("id", ids);
     setSelecionados(new Set());
     setProcessandoSelecao(false);
+    toast("Posições limpas.");
   }
 
   async function moverColuna(codigoAtual: string) {
-    const novoCodigo = window.prompt(`Mover a coluna "${codigoAtual}" (com todos os andares) para qual código?`, codigoAtual);
+    const novoCodigo = await perguntar(`Mover a coluna "${codigoAtual}" (com todos os andares) para qual código?`, codigoAtual);
     if (!novoCodigo || novoCodigo.trim().toUpperCase() === codigoAtual) return;
     const destino = novoCodigo.trim().toUpperCase();
 
@@ -549,7 +556,7 @@ export default function GerenciarPage() {
       .eq("local_id", localAtivoId);
 
     if (error) {
-      window.alert(
+      await avisar(
         `Não consegui mover — provavelmente já existe uma coluna "${destino}" com andares que colidem com os dessa.`
       );
       return;
@@ -558,10 +565,11 @@ export default function GerenciarPage() {
     setPosicoes((prev) =>
       prev.map((p) => (p.codigo_coluna === codigoAtual && p.local_id === localAtivoId ? { ...p, codigo_coluna: destino } : p))
     );
+    toast(`Coluna movida pra "${destino}".`);
   }
 
   async function renomearRua(ruaAtual: string) {
-    const novaRua = window.prompt(`Renomear a Rua ${ruaAtual} pra qual letra/nome? (afeta todas as colunas dela)`, ruaAtual);
+    const novaRua = await perguntar(`Renomear a Rua ${ruaAtual} pra qual letra/nome? (afeta todas as colunas dela)`, ruaAtual);
     if (!novaRua || novaRua.trim().toUpperCase() === ruaAtual) return;
     const destino = novaRua.trim().toUpperCase();
 
@@ -592,7 +600,9 @@ export default function GerenciarPage() {
 
     const comErro = resultados.length - semErro.length;
     if (comErro > 0) {
-      window.alert(`${comErro} coluna(s) não foram renomeadas (provável colisão com código já existente).`);
+      await avisar(`${comErro} coluna(s) não foram renomeadas (provável colisão com código já existente).`);
+    } else {
+      toast(`Rua renomeada pra "${destino}".`);
     }
   }
 

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Posicao, compararColunas, descricaoProduto } from "@/lib/types";
 import { beepErro, beepSucesso } from "@/lib/som";
 import { Card, PageHeader } from "@/components/ui";
+import Ajuda from "@/components/Ajuda";
 
 type Estado = "lendo" | "buscando" | "nao_encontrado" | "erro_camera";
 
@@ -183,6 +184,9 @@ export default function BiparPage() {
       <PageHeader
         titulo="Bipar"
         subtitulo="Aponte pro QR do cesto/produto com a câmera, ou bipe com um leitor físico USB/Bluetooth."
+        ajuda={
+          <Ajuda texto="Se o mesmo código aparecer em mais de um andar, o sistema te mostra a lista pra escolher qual. Sem câmera? Usa o campo de leitor físico logo abaixo." />
+        }
       />
 
       <Card>

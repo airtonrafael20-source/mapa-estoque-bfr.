@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Movimentacao, Posicao, descricaoProduto } from "@/lib/types";
 import { Card, PageHeader } from "@/components/ui";
 import { baixarCsv } from "@/lib/csv";
+import Ajuda from "@/components/Ajuda";
 
 interface MovComPosicao extends Movimentacao {
   posicoes: Posicao | null;
@@ -99,7 +100,7 @@ export default function GiroPage() {
 
   return (
     <div>
-      <PageHeader titulo="Giro de estoque" subtitulo="O que vende rápido (curva ABC) e o que está parado." />
+      <PageHeader titulo="Giro de estoque" subtitulo="O que vende rápido (curva ABC) e o que está parado." ajuda={<Ajuda texto="Curva ABC: classe A são os produtos que respondem por 80% das retiradas (os campeões), B os próximos 15%, C os 5% que quase não saem. Itens parados: nada foi retirado/ajustado nessa posição há X dias." />} />
 
       <div className="mb-4 flex gap-2">
         <button

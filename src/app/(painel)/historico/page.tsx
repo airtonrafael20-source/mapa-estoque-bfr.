@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Movimentacao, Posicao, descricaoProduto } from "@/lib/types";
 import { Card, PageHeader } from "@/components/ui";
 import { baixarCsv } from "@/lib/csv";
+import { SkeletonLinhas } from "@/components/Skeleton";
 
 interface MovComPosicao extends Movimentacao {
   posicoes: Posicao | null;
@@ -96,16 +97,24 @@ export default function HistoricoPage() {
         titulo="Histórico de movimentações"
         subtitulo="Tudo que foi retirado, reposto, ajustado ou recebido — quem fez e quando."
         acao={
-          <button
-            onClick={exportar}
-            className="rounded-lg border border-accent px-4 py-2.5 text-sm font-semibold text-accent"
-          >
-            📄 Exportar CSV
-          </button>
+          <div className="flex gap-2 print:hidden">
+            <button
+              onClick={() => window.print()}
+              className="rounded-lg border border-accent px-4 py-2.5 text-sm font-semibold text-accent"
+            >
+              🖨 PDF
+            </button>
+            <button
+              onClick={exportar}
+              className="rounded-lg border border-accent px-4 py-2.5 text-sm font-semibold text-accent"
+            >
+              📄 Exportar CSV
+            </button>
+          </div>
         }
       />
 
-      <Card className="mb-4">
+      <Card className="mb-4 print:hidden">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <input
             value={filtroTexto}
@@ -126,9 +135,10 @@ export default function HistoricoPage() {
       </Card>
 
       {carregando ? (
-        <p className="text-sm text-ink-dim">Carregando…</p>
+        <SkeletonLinhas quantidade={8} />
       ) : filtradas.length === 0 ? (
-        <Card>
+        <Card className="text-center">
+          <p className="mb-2 text-4xl">📭</p>
           <p className="text-ink-dim">Nenhuma movimentação encontrada com esse filtro.</p>
         </Card>
       ) : (

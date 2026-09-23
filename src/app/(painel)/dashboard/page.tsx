@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Movimentacao, Posicao, descricaoProduto, nivelOcupacao } from "@/lib/types";
 import { Card, PageHeader } from "@/components/ui";
+import { SkeletonCards } from "@/components/Skeleton";
 
 interface MovComPosicao extends Movimentacao {
   posicoes: Posicao | null;
@@ -78,10 +79,21 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <PageHeader titulo="Dashboard" subtitulo="O que está acontecendo no estoque agora." />
+      <PageHeader
+        titulo="Dashboard"
+        subtitulo="O que está acontecendo no estoque agora."
+        acao={
+          <button
+            onClick={() => window.print()}
+            className="rounded-lg border border-accent px-4 py-2.5 text-sm font-semibold text-accent print:hidden"
+          >
+            🖨 PDF
+          </button>
+        }
+      />
 
       {carregando ? (
-        <p className="text-sm text-ink-dim">Carregando…</p>
+        <SkeletonCards quantidade={4} />
       ) : (
         <>
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">

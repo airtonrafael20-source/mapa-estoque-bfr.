@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import LogoUploader from "@/components/LogoUploader";
 import TrocarFundo from "@/components/TrocarFundo";
@@ -15,12 +15,15 @@ import {
   IconLayoutGrid,
   IconLogout,
   IconMenu2,
+  IconMoon,
   IconPackageImport,
   IconPrinter,
   IconSearch,
   IconSettings,
   IconSettings2,
+  IconSun,
 } from "@tabler/icons-react";
+import { alternarTema, temaAtual } from "@/components/ThemeApplier";
 
 type Papel = "admin" | "operador";
 
@@ -59,6 +62,11 @@ export default function Sidebar({
   const router = useRouter();
   const supabase = createClient();
   const [aberto, setAberto] = useState(false);
+  const [claro, setClaro] = useState(false);
+
+  useEffect(() => {
+    setClaro(temaAtual() === "light");
+  }, []);
 
   const itens = role === "admin" ? [...ITENS_TODOS, ...ITENS_ADMIN] : ITENS_TODOS;
 
@@ -107,6 +115,13 @@ export default function Sidebar({
           {nome} {role === "operador" && <span className="text-ink-dim">· operador</span>}
         </p>
         <TrocarFundo />
+        <button
+          onClick={() => setClaro(alternarTema() === "light")}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-ink-dim transition hover:border-accent hover:text-accent"
+        >
+          {claro ? <IconMoon size={16} /> : <IconSun size={16} />}
+          {claro ? "Modo escuro" : "Modo claro"}
+        </button>
         <button
           onClick={sair}
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-ink-dim transition hover:border-alert hover:text-alert"

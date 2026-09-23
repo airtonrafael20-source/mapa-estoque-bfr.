@@ -16,16 +16,19 @@ export function PageHeader({
   titulo,
   subtitulo,
   acao,
+  ajuda,
 }: {
   titulo: string;
   subtitulo?: string;
   acao?: React.ReactNode;
+  ajuda?: React.ReactNode;
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="font-display text-2xl font-semibold tracking-wide text-ink break-words sm:text-3xl">
+        <h1 className="flex flex-wrap items-center gap-2 font-display text-2xl font-semibold tracking-wide text-ink break-words sm:text-3xl">
           {titulo}
+          {ajuda}
         </h1>
         {subtitulo && <p className="mt-1 text-sm text-ink-dim break-words">{subtitulo}</p>}
       </div>

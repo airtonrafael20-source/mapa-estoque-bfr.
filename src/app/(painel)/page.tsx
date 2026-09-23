@@ -15,6 +15,7 @@ import {
 } from "@/lib/types";
 import { Card, PageHeader } from "@/components/ui";
 import { baixarCsv } from "@/lib/csv";
+import { SkeletonCards } from "@/components/Skeleton";
 
 const Mapa3DRua = dynamic(() => import("@/components/Mapa3DRua"), {
   ssr: false,
@@ -175,11 +176,13 @@ export default function MapaPage() {
       />
 
       {carregando ? (
-        <p className="text-sm text-ink-dim">Carregando mapa…</p>
+        <SkeletonCards />
       ) : colunas.length === 0 ? (
-        <Card>
+        <Card className="text-center">
+          <p className="mb-2 text-5xl">📦</p>
+          <p className="mb-1 font-display text-lg font-semibold text-ink">Nenhuma posição cadastrada ainda</p>
           <p className="text-ink-dim">
-            Nenhuma posição cadastrada ainda. Comece em{" "}
+            Comece em{" "}
             <Link href="/gerenciar" className="text-accent underline underline-offset-2">
               Gerenciar posições
             </Link>

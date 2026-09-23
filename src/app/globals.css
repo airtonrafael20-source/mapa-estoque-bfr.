@@ -15,6 +15,34 @@
   --alert: #c1443c;
 }
 
+/* Modo claro — ativado com data-theme="light" no <html> */
+:root[data-theme="light"] {
+  --bg: #f4f4f2;
+  --surface: #ffffff;
+  --surface-2: #f0f0ee;
+  --border: #dcdcd8;
+  --ink: #17171a;
+  --ink-dim: #6b6b68;
+  --ok: #2f8a3d;
+  --pend: #b97418;
+  --alert: #b23a30;
+}
+
+@keyframes toast-entrar {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes skeleton-pulso {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@keyframes splash-crescer {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
