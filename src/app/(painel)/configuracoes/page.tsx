@@ -33,6 +33,11 @@ export default function ConfiguracoesPage() {
   const [perfis, setPerfis] = useState<Perfil[]>([]);
   const [carregandoPerfis, setCarregandoPerfis] = useState(true);
   const [meuId, setMeuId] = useState("");
+  const [novoNome, setNovoNome] = useState("");
+  const [novoEmail, setNovoEmail] = useState("");
+  const [novoRole, setNovoRole] = useState<"admin" | "operador">("operador");
+  const [criandoUsuario, setCriandoUsuario] = useState(false);
+  const [erroUsuario, setErroUsuario] = useState<string | null>(null);
   const [temDemo, setTemDemo] = useState(false);
   const [processandoDemo, setProcessandoDemo] = useState(false);
 
@@ -110,6 +115,35 @@ export default function ConfiguracoesPage() {
     setPerfis((prev) => prev.map((p) => (p.id === id ? { ...p, role: novoRole } : p)));
     await supabase.from("perfis").update({ role: novoRole }).eq("id", id);
     toast("Permissão atualizada.");
+  }
+
+  async function adicionarUsuario() {
+    if (!novoNome.trim() || !novoEmail.trim()) {
+      setErroUsuario("Preenche nome e e-mail.");
+      return;
+    }
+    setCriandoUsuario(true);
+    setErroUsuario(null);
+
+    const resp = await fetch("/api/criar-usuario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: novoNome, email: novoEmail, role: novoRole }),
+    });
+    const dados = await resp.json();
+    setCriandoUsuario(false);
+
+    if (!resp.ok) {
+      setErroUsuario(dados.erro || "Não consegui convidar essa pessoa.");
+      return;
+    }
+
+    toast(`Convite enviado pra ${novoEmail}!`);
+    setNovoNome("");
+    setNovoEmail("");
+    setNovoRole("operador");
+    const { data } = await supabase.from("perfis").select("id, nome, email, role").order("nome", { ascending: true });
+    setPerfis((data as Perfil[]) ?? []);
   }
 
   async function criarDemo() {
@@ -273,6 +307,45 @@ export default function ConfiguracoesPage() {
           Bipar, Inventário, Recebimento etc., mas não consegue excluir posições, renomear ruas nem entrar
           aqui em Configurações.
         </p>
+
+        <div className="mb-5 rounded-lg border border-accent/30 bg-accent/5 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent">Adicionar pessoa nova</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+            <input
+              value={novoNome}
+              onChange={(e) => setNovoNome(e.target.value)}
+              placeholder="Nome"
+              className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-accent sm:col-span-1"
+            />
+            <input
+              value={novoEmail}
+              onChange={(e) => setNovoEmail(e.target.value)}
+              placeholder="E-mail"
+              type="email"
+              className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-accent sm:col-span-1"
+            />
+            <select
+              value={novoRole}
+              onChange={(e) => setNovoRole(e.target.value as "admin" | "operador")}
+              className="rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-ink outline-none focus:border-accent"
+            >
+              <option value="operador">Operador</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button
+              onClick={adicionarUsuario}
+              disabled={criandoUsuario}
+              className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-ink disabled:opacity-60"
+            >
+              {criandoUsuario ? "Enviando…" : "✔ Convidar"}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-ink-dim">
+            A pessoa recebe um e-mail pra criar a própria senha e já entra com o cargo escolhido.
+          </p>
+          {erroUsuario && <p className="mt-2 text-xs text-alert">{erroUsuario}</p>}
+        </div>
+
         {carregandoPerfis ? (
           <p className="text-sm text-ink-dim">Carregando…</p>
         ) : (

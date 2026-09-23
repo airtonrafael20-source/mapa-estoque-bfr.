@@ -7,6 +7,7 @@ import ThemeApplier from "@/components/ThemeApplier";
 import BuscaGlobal from "@/components/BuscaGlobal";
 import SplashScreen from "@/components/SplashScreen";
 import OnboardingWizard from "@/components/OnboardingWizard";
+import { RoleProvider } from "@/components/RoleContext";
 
 export default async function PainelLayout({
   children,
@@ -48,6 +49,7 @@ export default async function PainelLayout({
 
   return (
     <UIFeedbackProvider>
+    <RoleProvider role={role}>
       <ThemeApplier corPrincipal={corPrincipal} />
       <SplashScreen logo={logo} nomeApp={nomeApp} />
       <BuscaGlobal />
@@ -80,6 +82,7 @@ export default async function PainelLayout({
           )}
         </div>
       </div>
+    </RoleProvider>
     </UIFeedbackProvider>
   );
 }

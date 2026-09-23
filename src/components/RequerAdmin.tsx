@@ -1,38 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui";
+import { useRole } from "@/components/RoleContext";
 
 export default function RequerAdmin({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<"checando" | "liberado" | "negado">("checando");
+  const role = useRole();
 
-  useEffect(() => {
-    let ativo = true;
-    const supabase = createClient();
-
-    async function checar() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: perfil } = await supabase.from("perfis").select("role").eq("id", user.id).maybeSingle();
-      if (!ativo) return;
-      setStatus((perfil?.role as string | undefined) === "admin" ? "liberado" : "negado");
-    }
-
-    checar();
-    return () => {
-      ativo = false;
-    };
-  }, []);
-
-  if (status === "checando") {
-    return <p className="text-sm text-ink-dim">Carregando…</p>;
-  }
-
-  if (status === "negado") {
+  if (role !== "admin") {
     return (
       <Card>
         <p className="mb-2 font-display text-lg font-semibold text-ink">🔒 Acesso restrito</p>
